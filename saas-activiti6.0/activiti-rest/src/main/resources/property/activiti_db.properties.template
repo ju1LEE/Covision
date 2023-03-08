@@ -1,0 +1,16 @@
+
+#db=h2
+#jdbc.driver=org.h2.Driver
+#jdbc.url=jdbc:h2:mem:activiti;DB_CLOSE_DELAY=-1
+#jdbc.username=sa
+#jdbc.password=
+
+#Activiti DB Properties
+
+#Database Type
+#mysql, oracle
+db=mysql
+
+#JNDI lookup Resource ID
+db.mapper.engine.datasource=java:/comp/env/jdbc/activiti-ds
+db.mapper.one.datasource=java:/comp/env/jdbc/groupware-ds

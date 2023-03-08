@@ -1,0 +1,196 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>covision</groupId>
+		<artifactId>activiti-root</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+	</parent>
+
+	<artifactId>activiti-app</artifactId>
+	<packaging>war</packaging>
+	<version>${activiti-app.version}</version>
+	<name>activiti-app</name>
+	<description>activiti App</description>
+
+	<properties>
+		<springframework.version>4.1.6.RELEASE</springframework.version>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>covision</groupId>
+			<artifactId>activiti-coviflow</artifactId>
+		</dependency>
+
+		<!-- spring -->
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-orm</artifactId>
+			<version>${springframework.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-aop</artifactId>
+			<version>${springframework.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.data</groupId>
+			<artifactId>spring-data-commons</artifactId>
+			<version>1.9.1.RELEASE</version>
+		</dependency>
+
+
+		<!-- activiti -->
+		<dependency>
+			<groupId>org.activiti</groupId>
+			<artifactId>activiti-process-validation</artifactId>
+			<version>${activiti.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.activiti</groupId>
+			<artifactId>activiti-json-converter</artifactId>
+			<version>${activiti.version}</version>
+		</dependency>
+
+		<!-- https://mvnrepository.com/artifact/org.activiti/activiti-app-logic -->
+		<dependency>
+			<groupId>org.activiti</groupId>
+			<artifactId>activiti-app-logic</artifactId>
+			<version>${activiti.version}</version>
+			<exclusions>
+		        <exclusion>
+		            <groupId>org.activiti</groupId>
+		            <artifactId>editor-image-generator</artifactId>
+		        </exclusion>
+				<!-- log4j 용 bridge 사용으로 변경 -->
+		        <exclusion>
+		            <groupId>org.slf4j</groupId>
+		            <artifactId>slf4j-log4j12</artifactId>
+		        </exclusion>
+			</exclusions>
+		</dependency>
+		<!-- https://mvnrepository.com/artifact/org.activiti/activiti-app-rest -->
+		<dependency>
+			<groupId>org.activiti</groupId>
+			<artifactId>activiti-app-rest</artifactId>
+			<version>${activiti.version}</version>
+		</dependency>
+		<!-- https://mvnrepository.com/artifact/org.activiti/activiti-dmn-engine -->
+		<dependency>
+			<groupId>org.activiti</groupId>
+			<artifactId>activiti-dmn-engine</artifactId>
+			<version>${activiti.version}</version>
+			<exclusions>
+				<!-- log4j 용 bridge 사용으로 변경 -->
+		        <exclusion>
+		            <groupId>org.slf4j</groupId>
+		            <artifactId>slf4j-log4j12</artifactId>
+		        </exclusion>
+		        <exclusion>
+		            <groupId>log4j</groupId>
+		            <artifactId>log4j</artifactId>
+		        </exclusion>
+			</exclusions>
+		</dependency>
+		<!-- https://mvnrepository.com/artifact/org.activiti/activiti-dmn-engine-configurator -->
+		<dependency>
+			<groupId>org.activiti</groupId>
+			<artifactId>activiti-dmn-engine-configurator</artifactId>
+			<version>6.0.0</version>
+		</dependency>
+		<!-- https://mvnrepository.com/artifact/org.activiti/activiti-form-engine -->
+		<dependency>
+			<groupId>org.activiti</groupId>
+			<artifactId>activiti-form-engine</artifactId>
+			<version>6.0.0</version>
+			<exclusions>
+				<!-- log4j 용 bridge 사용으로 변경 -->
+		        <exclusion>
+		            <groupId>org.slf4j</groupId>
+		            <artifactId>slf4j-log4j12</artifactId>
+		        </exclusion>
+			</exclusions>
+		</dependency>
+		<!-- https://mvnrepository.com/artifact/org.activiti/activiti-form-api -->
+		<dependency>
+			<groupId>org.activiti</groupId>
+			<artifactId>activiti-form-api</artifactId>
+			<version>6.0.0</version>
+		</dependency>
+		<!-- https://mvnrepository.com/artifact/org.activiti/activiti-form-engine-configurator -->
+		<dependency>
+			<groupId>org.activiti</groupId>
+			<artifactId>activiti-form-engine-configurator</artifactId>
+			<version>6.0.0</version>
+		</dependency>
+		<!-- https://mvnrepository.com/artifact/org.activiti/activiti-form-json-converter -->
+		<dependency>
+			<groupId>org.activiti</groupId>
+			<artifactId>activiti-form-json-converter</artifactId>
+			<version>6.0.0</version>
+			<exclusions>
+				<!-- log4j 용 bridge 사용으로 변경 -->
+		        <exclusion>
+		            <groupId>org.slf4j</groupId>
+		            <artifactId>slf4j-log4j12</artifactId>
+		        </exclusion>
+			</exclusions>
+		</dependency>
+		<!-- https://mvnrepository.com/artifact/org.activiti/activiti-form-model -->
+		<dependency>
+			<groupId>org.activiti</groupId>
+			<artifactId>activiti-form-model</artifactId>
+			<version>6.0.0</version>
+		</dependency>
+		<!-- https://mvnrepository.com/artifact/org.activiti/activiti-image-generator -->
+		<dependency>
+			<groupId>org.activiti</groupId>
+			<artifactId>activiti-image-generator</artifactId>
+			<version>6.0.0</version>
+		</dependency>
+
+
+		<!-- others -->
+
+		<!-- https://mvnrepository.com/artifact/com.mchange/c3p0 -->
+		<dependency>
+			<groupId>com.mchange</groupId>
+			<artifactId>c3p0</artifactId>
+			<version>0.9.5.1</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.xmlgraphics</groupId>
+			<artifactId>batik-anim</artifactId>
+			<version>1.7</version>
+		</dependency>
+		<dependency>
+			<groupId>commons-io</groupId>
+			<artifactId>commons-io</artifactId>
+			<version>2.0.1</version>
+		</dependency>
+		<dependency>
+			<groupId>org.imgscalr</groupId>
+			<artifactId>imgscalr-lib</artifactId>
+			<version>4.2</version>
+		</dependency>
+		<!-- https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-core -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-core</artifactId>
+			<version>2.3.3</version>
+		</dependency>
+		<!-- https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-databind -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+			<version>2.3.3</version>
+		</dependency>
+
+	</dependencies>
+
+</project>

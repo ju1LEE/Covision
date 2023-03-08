@@ -1,0 +1,1414 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="coviflow">
+    <resultMap type="hashmap" id="bodyContext">
+    	<result property="BodyContext" column="BodyContext" jdbcType="CLOB" javaType="java.lang.String"/>    
+    </resultMap>
+    
+    <insert id="insertLegacy" parameterType="hashmap">
+    <![CDATA[
+        INSERT INTO jwf_legacy
+        (
+        	LegacyID,
+        	Parameters,
+        	Mode_,
+        	State,
+        	EventTime,
+        	ErrorMessage,
+        	ErrorStackTrace,
+        	ErrorClass,
+        	DeleteTime,
+        	FormInstID,
+        	ProcessID,
+			FormPrefix,
+			DocNumber,
+			ApproverId,
+			ApvMode,
+			FormInfoExt,
+			ApprovalContext
+        )
+        VALUES
+        (
+        	#{legacyID},
+        	#{parameters},
+        	#{mode},
+        	#{state},
+        	#{eventTime},
+        	#{errorMessage},
+        	#{errorStackTrace},
+        	#{errorClass},
+        	#{deleteTime},
+        	#{FormInstID},
+        	#{ProcessID},
+			#{FormPrefix},
+			#{DocNumber},
+			#{ApproverId},
+			#{ApvMode},
+			#{FormInfoExt},
+			#{ApprovalContext}
+        )
+    ]]>
+	</insert>
+    
+    <insert id="insertErrorLog" parameterType="hashmap">
+    <![CDATA[
+        INSERT INTO jwf_error
+        (
+        	ProcessDefID,
+        	ProcessInsID,
+        	ExecutionID,
+        	TaskID,
+        	ServerIP,
+        	ErrorKind,
+        	ErrorTime,
+        	ErrorMessage,
+        	ErrorStackTrace,
+        	ErrorClass
+        )
+        VALUES
+        (
+        	#{processDefID},
+        	#{processInsID},
+        	#{executionID},
+        	#{taskID},
+        	#{serverIP},
+        	#{errorKind},
+        	#{errorTime},
+        	#{errorMessage},
+        	#{errorStackTrace},
+        	#{errorClass}
+        )
+    ]]>
+	</insert>
+	
+ 	<insert id="insertAppvLinePublic" parameterType="hashmap">
+    <![CDATA[
+        INSERT INTO jwf_domaindata
+        (
+            DomainDataName,
+            ProcessID, 
+            DomainDataContext
+        )
+        VALUES
+        (
+            'APPROVERCONTEXT', 
+            #{processID}, 
+            #{domainDataContext}
+        )
+    ]]>
+	</insert>
+	
+ 	<update id="updateAppvLinePublic" parameterType="hashmap">
+ 	    UPDATE jwf_domaindata 
+ 	    SET DomainDataContext = #{domainDataContext}
+ 	    WHERE ProcessID = #{processID}
+ 	</update>
+ 	
+ 	<update id="updateAppvLinePublicForOU" parameterType="hashmap">
+ 	    UPDATE jwf_domaindata 
+ 	    SET DomainDataContext = #{domainDataContext}
+ 	    WHERE ProcessID IN 
+                <foreach collection="processIdList" item="item" index="index" separator="," open="(" close=")">
+                    #{item}
+                </foreach>
+ 	</update>
+ 	
+ 	<update id="updateAppvLinePublicForSub" parameterType="hashmap">
+ 	    UPDATE
+	      (SELECT d.* FROM jwf_domaindata d
+	      INNER JOIN jwf_process p ON d.ProcessID = p.ProcessID
+	      WHERE P.ParentProcessID = #{processID}) A
+	    SET A.DomainDataContext = #{domainDataContext}
+ 	</update>
+ 	
+ 	<select id="selectAllAppvLinePublic" parameterType="hashmap" resultType="hashmap">
+		SELECT P.ProcessID AS "ProcessID"
+		FROM jwf_domaindata D 
+		INNER JOIN jwf_process P 
+		ON D.ProcessID = P.ProcessID
+		WHERE P.FormInstID = #{formInstID}
+    </select>
+ 	
+ 	<update id="updateAllAppvLinePublic" parameterType="hashmap">
+ 	    UPDATE (
+		  SELECT D.DomainDataContext,P.FormInstID FROM jwf_domaindata D
+		  INNER JOIN jwf_process P ON D.ProcessID = P.ProcessID
+		)
+		SET DomainDataContext = #{domainDataContext}
+		WHERE FormInstID = #{formInstID}
+ 	</update>
+ 	
+ 	<insert id="insertAppvLinePrivate" parameterType="hashmap">
+    <![CDATA[
+        INSERT INTO jwf_privatedomaindata
+        (
+            CustomCategory, 
+            DefaultYN,
+            DisplayName,
+            OwnerID,
+            Abstract,
+            Description,
+            PrivateContext
+        )
+        VALUES
+        (
+        	'APPROVERCONTEXT',
+            #{defaultYN}, 
+            #{displayName}, 
+            #{ownerID},
+            #{abstract},
+            #{description},
+            #{privateContext}
+        )
+    ]]>
+	</insert>
+	
+	<select id="selectProcessInitiatorInfo" parameterType="hashmap" resultType="hashmap">
+		SELECT 
+			InitiatorID AS "InitiatorID"
+			, InitiatorName AS "InitiatorName"
+			, InitiatorUnitID AS "InitiatorUnitID"
+			, InitiatorUnitName AS "InitiatorUnitName"
+		FROM jwf_process
+		WHERE ProcessID = #{processID};
+    </select>
+	
+ 	<insert id="insertProcess" parameterType="hashmap">
+    <![CDATA[
+        INSERT INTO jwf_process
+        (
+            ProcessID, 
+            ProcessKind,
+            ParentProcessID,
+            ParentInstanceID,
+            ProcessDescriptionID,
+            ProcessName,
+            DocSubject,
+            BusinessState,
+            InitiatorID,
+            InitiatorName,
+            InitiatorUnitID,
+            InitiatorUnitName,
+            FormInstID,
+            ProcessState,
+            InitiatorSIPAddress,
+            StartDate
+        )
+        VALUES
+        (
+        	#{processID},
+            #{processKind}, 
+            #{parentProcessID}, 
+            #{parentInstanceID},
+            #{processDescriptionID},
+            #{processName},
+            #{docSubject},
+            #{businessState},
+            #{initiatorID},
+            #{initiatorName},
+            #{initiatorUnitID},
+            #{initiatorUnitName},
+            #{formInstID},
+            #{processState},
+            #{initiatorSIPAddress},
+            TO_DATE(#{startDate}, 'YYYY-MM-DD HH24:MI:SS')
+        )
+    ]]>
+	</insert>
+	
+ 	<insert id="insertProcessDesc" parameterType="hashmap">
+        INSERT INTO jwf_processdescription
+        (
+            FormInstID, 
+            FormID,
+            FormPrefix,
+            FormName,
+            FormSubject,
+            IsSecureDoc,
+            IsFile,
+            FileExt,
+            IsComment,
+            ApproverCode,
+            ApproverName,
+            ApprovalStep,
+            ApproverSIPAddress,
+            IsReserved,
+            ReservedGubun,
+            ReservedTime,
+            Priority,
+            IsModify,
+            Reserved1,
+            Reserved2,
+			BusinessData1,
+			BusinessData2,
+			BusinessData3,
+			BusinessData4,
+			BusinessData5,
+			BusinessData6,
+			BusinessData7,
+			BusinessData8,
+			BusinessData9,
+			BusinessData10
+        )
+        VALUES
+        (
+        	#{formInstID},
+            #{formID},
+            #{formPrefix}, 
+            #{formName}, 
+            #{formSubject},
+            #{isSecureDoc},
+            #{isFile},
+            #{fileExt},
+            #{isComment},
+            #{approverCode},
+            #{approverName},
+            #{approvalStep},
+            #{approverSIPAddress},
+            #{isReserved},
+            #{reservedGubun},
+            #{reservedTime},
+            #{priority},
+            #{isModify},
+            #{reserved1},
+            #{reserved2},
+			#{BusinessData1},
+			#{BusinessData2},
+			#{BusinessData3},
+			#{BusinessData4},
+			#{BusinessData5},
+			#{BusinessData6},
+			#{BusinessData7},
+			#{BusinessData8},
+			#{BusinessData9},
+			#{BusinessData10}
+        )
+    	<selectKey keyProperty="ProcessDescriptionID" resultType="Integer" order="AFTER">
+			SELECT JWF_PROCESSDESCRIPTION_SEQ.CURRVAL FROM dual
+		</selectKey>
+	</insert>
+	
+ 	<insert id="insertCirculationDesc" parameterType="hashmap">
+        INSERT INTO jwf_circulationboxdescription
+        (
+            FormInstID, 
+            FormID,
+            FormPrefix,
+            FormName,
+            FormSubject,
+            IsSecureDoc,
+            IsFile,
+            FileExt,
+            IsComment,
+            ApproverCode,
+            ApproverName,
+            ApproverSIPAddress,
+            IsReserved,
+            ReservedGubun,
+            ReservedTime,
+            Priority,
+            IsModify,
+            Reserved1,
+            Reserved2
+        )
+        VALUES
+        (
+        	#{formInstID},
+            #{formID},
+            #{formPrefix}, 
+            #{formName}, 
+            #{formSubject},
+            #{isSecureDoc},
+            #{isFile},
+            #{fileExt},
+            #{isComment},
+            #{approverCode},
+            #{approverName},
+            #{approverSIPAddress},
+            #{isReserved},
+            #{reservedGubun},
+            #{reservedTime},
+            #{priority},
+            #{isModify},
+            #{reserved1},
+            #{reserved2}
+        )
+    	<selectKey keyProperty="CirculationBoxDescriptionID" resultType="Integer" order="AFTER">
+			SELECT JWF_CIRCULATIONBOXDESC_SEQ.CURRVAL FROM dual
+		</selectKey>
+	</insert>
+ 	 	
+ 	<insert id="insertCirculation" parameterType="hashmap">
+    <![CDATA[
+        INSERT INTO jwf_circulationbox
+        (
+            ProcessID, 
+            CirculationBoxDescriptionID,
+            FormInstID,
+            ReceiptID,
+            ReceiptType,
+            ReceiptName,
+            ReceiptDate,
+            Kind,
+            State,
+            ReadDate,
+            SenderID,
+            SenderName,
+            Subject,
+            Comment_,
+            DataState,
+            RegID,
+            RegDate,
+            ModID,
+            ModDate
+        )
+        VALUES
+        (
+        	#{processID},
+            #{circulationBoxDescriptionID}, 
+            #{formInstID}, 
+            #{receiptID},
+            #{receiptType},
+            #{receiptName},
+            TO_DATE(#{receiptDate}, 'YYYY-MM-DD HH24:MI:SS'),
+            #{kind},
+            #{state},
+            #{readDate},
+            #{senderID},
+            #{senderName},
+            #{subject},
+            #{comment},
+            #{dataState},
+            #{regID},
+            TO_DATE(#{regDate}, 'YYYY-MM-DD HH24:MI:SS'),
+            #{modID},
+            TO_DATE(#{modDate}, 'YYYY-MM-DD HH24:MI:SS')
+        )
+    ]]>
+	</insert>
+ 	
+ 	<update id="updateCirculation" parameterType="hashmap">
+ 	    UPDATE jwf_circulationbox
+ 	    SET DataState = #{dataState}
+ 	    , ModID = #{modID}
+ 	    , DeletedDate = SYSDATE
+ 	    , ModDate = SYSDATE
+ 	    WHERE FormInstID = #{formInstID}
+ 	</update>
+ 	
+ 	<update id="updateCirculationForSubject" parameterType="hashmap">
+ 	    UPDATE jwf_circulationbox
+ 	    SET Subject = #{subject}
+ 	    WHERE FormInstID = #{formInstID}
+ 	</update>
+ 	
+  	<insert id="insertWorkItemDesc" parameterType="hashmap">
+        INSERT INTO jwf_workitemdescription
+        (
+            FormInstID, 
+            FormID,
+            FormName,
+            FormSubject,
+            IsSecureDoc,
+            IsFile,
+            FileExt,
+            IsComment,
+            ApproverCode,
+            ApproverName,
+            ApprovalStep,
+            ApproverSIPAddress,
+            IsReserved,
+            ReservedGubun,
+            ReservedTime,
+            Priority,
+            IsModify,
+            Reserved1,
+            Reserved2
+        )
+        VALUES
+        (
+        	#{formInstID},
+            #{formID}, 
+            #{formName}, 
+            #{formSubject},
+            #{isSecureDoc},
+            #{isFile},
+            #{fileExt},
+            #{isComment},
+            #{approverCode},
+            #{approverName},
+            #{approvalStep},
+            #{approverSIPAddress},
+            #{isReserved},
+            #{reservedGubun},
+            #{reservedTime},
+            #{priority},
+            #{isModify},
+            #{reserved1},
+            #{reserved2}
+        )
+    	<selectKey keyProperty="WorkItemDescriptionID" resultType="Integer" order="AFTER">
+			SELECT JWF_WORKITEMDESCRIPTION_SEQ.CURRVAL FROM dual
+		</selectKey>
+	</insert>	
+ 
+ 	<insert id="insertWorkItem" parameterType="hashmap">
+        INSERT INTO jwf_workitem
+        (
+            TaskID,
+            ProcessID,
+            PerformerID,
+            WorkItemDescriptionID,
+            Name,
+            DSCR,
+            Priority,
+            ActualKind,
+            UserCode,
+            UserName,
+            DeputyID,
+            DeputyName,
+            State,
+            Created,
+            FinishRequested,
+            Finished,
+            Limit,
+            LastRepeated,
+            Finalized,
+            Deleted,
+            InlineSubProcess,
+            Charge,
+            BusinessData1,
+            BusinessData2,
+            BusinessData3,
+            BusinessData4,
+            BusinessData5,
+            BusinessData6,
+            BusinessData7,
+            BusinessData8,
+            BusinessData9,
+            BusinessData10
+        )
+        VALUES
+        (
+        	#{taskID},
+        	#{processID},
+        	#{performerID},
+            #{workItemDescriptionID}, 
+            #{name}, 
+            #{dscr},
+            #{priority},
+            #{actualKind},
+            #{userCode},
+            #{userName},
+            #{deputyID},
+            #{deputyName},
+            #{state},
+            TO_DATE(#{created}, 'YYYY-MM-DD HH24:MI:SS'),
+            #{finishRequested},
+            TO_DATE(#{finished}, 'YYYY-MM-DD HH24:MI:SS'),
+            TO_DATE(#{limit}, 'YYYY-MM-DD HH24:MI:SS'),
+            #{lastRepeated},
+            #{finalized},
+            #{deleted},
+            #{inlineSubProcess},
+            #{charge},
+            #{businessData1},
+            #{businessData2},
+            #{businessData3},
+            #{businessData4},
+            #{businessData5},
+            #{businessData6},
+            #{businessData7},
+            #{businessData8},
+            #{businessData9},
+            #{businessData10}
+        )
+        <selectKey keyProperty="WorkItemID" resultType="Integer" order="AFTER">
+			SELECT JWF_WORKITEM_SEQ.CURRVAL FROM dual
+		</selectKey>
+    </insert>
+  	
+ 	<insert id="insertPerformer" parameterType="hashmap">
+        INSERT INTO jwf_performer
+        (
+            WorkitemID,
+            AllotKey,
+            UserCode,
+            UserName,
+            ActualKind,
+            State,
+            SubKind
+        )
+        VALUES
+        (
+        	#{workitemID},
+        	#{allotKey},
+            #{userCode}, 
+            #{userName}, 
+            #{actualKind},
+            #{state},
+            #{subKind}
+        )
+        <selectKey keyProperty="PerformerID" resultType="Integer" order="AFTER">
+			SELECT JWF_PERFORMER_SEQ.CURRVAL FROM dual
+		</selectKey>
+    </insert>
+    
+ 	<update id="updatePerformer" parameterType="hashmap">
+ 	    UPDATE jwf_performer 
+ 	    SET SubKind = #{subkind} 
+ 	    WHERE WorkItemID = #{workItemID}
+ 	</update>
+ 	
+ 	<update id="updatePerformerForCharge" parameterType="hashmap">
+ 	    UPDATE jwf_performer 
+ 	    SET State = #{state} 
+ 	    WHERE PerformerID = #{performerID}
+ 	</update>
+ 	
+ 	<update id="updateProcessDesc" parameterType="hashmap">
+ 	    UPDATE jwf_processdescription 
+ 	    SET ApproverCode = #{approverCode}, ApproverName = #{approverName}, ApprovalStep = #{approvalStep}, ApproverSIPAddress = #{approverSIPAddress}
+ 	    WHERE ProcessDescriptionID = #{processDescriptionID}
+ 	</update>
+ 	
+ 	<update id="updateProcessDescForModify" parameterType="hashmap">
+ 	    UPDATE jwf_processdescription 
+ 	    	<set>
+ 	    	    <if test="subject != null">FormSubject = #{subject},</if>
+ 	    	    <if test="isModify != null">IsModify = #{isModify},</if>
+ 	    	    <if test="isComment != null">IsComment = #{isComment},</if>
+ 	    	    <if test="isFile != null">IsFile = #{isFile}</if>
+ 	    	</set>
+ 	    <choose>
+            <when test="processDescriptionID != null and processDescriptionID != '' ">
+            	WHERE ProcessDescriptionID = #{processDescriptionID}
+            </when>
+            <otherwise>
+                WHERE FormInstID = #{formInstID}
+            </otherwise>
+        </choose>
+ 	</update>
+ 	
+ 	<update id="updateCirculationboxDescForModify" parameterType="hashmap">
+ 	    UPDATE jwf_circulationboxdescription 
+ 	    	<set>
+ 	    	    <if test="subject != null">FormSubject = #{subject},</if>
+ 	    	    <if test="isModify != null">IsModify = #{isModify},</if>
+ 	    	    <if test="isComment != null">IsComment = #{isComment},</if>
+ 	    	    <if test="isFile != null">IsFile = #{isFile}</if>
+ 	    	</set>
+ 	    WHERE FormInstID = #{formInstID}
+ 	</update>
+ 	
+	<update id="updateProcessDescForHold" parameterType="hashmap">
+ 	    UPDATE jwf_processdescription 
+ 	    SET IsReserved = #{isReserved}
+ 	    WHERE ProcessDescriptionID = #{processDescriptionID}
+ 	</update>
+ 	
+ 	<update id="updateProcessDescForHoldAll" parameterType="hashmap">	
+		UPDATE jwf_processdescription 
+		SET IsReserved = #{isReserved}
+		WHERE ProcessDescriptionID IN (
+		  SELECT ProcessDescriptionID
+		  FROM jwf_process
+		  WHERE FormInstID = #{formInstID}
+		)
+	</update>	
+ 	
+ 	<update id="updateWorkItemDescForModify" parameterType="hashmap">
+ 	    UPDATE jwf_workitemdescription 
+ 	    SET IsModify = #{isModify}
+ 	    WHERE WorkItemDescriptionID = #{workItemDescriptionID}
+ 	</update>
+ 	
+ 	<select id="selectCharge" parameterType="hashmap" resultType="hashmap">
+		select WorkItemID AS "WorkItemID", PerformerID AS "PerformerID"
+        FROM (
+            select WorkItemID, PerformerID
+            from jwf_workitem
+            where ProcessID = #{processID} AND Name='Charge'
+            order by workitemid desc
+        )
+        WHERE ROWNUM = 1
+    </select>
+ 	
+ 	<update id="updateWorkItemForCharge" parameterType="hashmap">
+ 	    UPDATE jwf_workitem 
+ 	    SET UserCode = #{userCode}, UserName = #{userName} 
+ 	    WHERE WorkItemID = #{workItemID}
+ 	</update>
+ 	
+ 	<update id="updateWorkItem" parameterType="hashmap">
+ 	    UPDATE jwf_workitem 
+ 	    SET PerformerID = #{performerID}
+ 	    WHERE WorkItemID = #{workItemID}
+ 	</update>
+ 	
+ 	<update id="updateWorkitemArchive" parameterType="hashmap">
+ 	    UPDATE jwf_workitem
+ 	    SET PIBusinessState = #{piBusinessState}
+ 	    WHERE ProcessID IN (SELECT ProcessID
+							 	    FROM jwf_process 
+							 	    WHERE ProcessID = #{processID}
+							 	    <if test="parentYN != null and parentYN != '' and (parentYN eq 'Y'.toString())">
+							 	    	or ParentProcessID = #{processID}
+							 	    </if>)
+ 	</update>
+ 	
+ 	<update id="updateWorkItemForReject" parameterType="hashmap">
+ 	    UPDATE jwf_workitem 
+ 	    SET State = #{state}, Finished = SYSDATE
+ 	    <if test="isMobile != null and isMobile != '' and (isMobile eq 'Y'.toString())">
+ 	        , BusinessData2 = 'MOBILE'
+ 	    </if>
+ 	    WHERE ProcessID = #{processID}
+ 	    AND Finished IS NULL
+ 	</update>
+ 	
+ 	<update id="updateWorkItemForResult" parameterType="hashmap">
+ 	    UPDATE jwf_workitem
+ 	    SET State = #{state}, Finished = SYSDATE
+ 	    <if test="isMobile != null and isMobile != '' and (isMobile eq 'Y'.toString())">
+ 	        , BusinessData2 = 'MOBILE'
+ 	    </if>
+ 	    <if test="isBatch != null and isBatch != '' and (isBatch eq 'Y'.toString())">
+ 	        , BusinessData3 = 'BATCH'
+ 	    </if>
+ 	    <choose>
+            <when test="processID != null and processID != '' ">
+            	WHERE processID = #{processID}
+            </when>
+            <otherwise>
+                WHERE WorkItemID = #{workItemID}
+            </otherwise>
+        </choose>
+ 	</update>
+ 	
+ 	<update id="updateWorkItemUsingTaskId" parameterType="hashmap">
+ 	    UPDATE jwf_workitem 
+ 	    SET State = #{state}, Finished = SYSDATE, Charge = #{charge}
+ 	    WHERE TaskID = #{taskID}
+ 	</update>
+ 	
+ 	<update id="updateWorkItemState" parameterType="hashmap">
+ 	    UPDATE jwf_workitem 
+ 	    SET State = #{state}
+ 	    WHERE TaskID = #{taskID}
+ 	</update>
+ 	
+ 	<update id="updateWorkItemStateUsingWorkitemId" parameterType="hashmap">
+ 	    UPDATE jwf_workitem 
+ 	    SET State = #{state}
+ 	    WHERE WorkItemID = #{workItemID}
+ 	</update>
+ 	
+ 	<update id="deleteWorkItemUsingTaskId" parameterType="hashmap">
+ 	    UPDATE jwf_workitem 
+ 	    SET Deleted = SYSDATE
+ 	    WHERE TaskID = #{taskID}
+ 	</update>
+ 	
+ 	<update id="updateWorkItemForChange" parameterType="hashmap">
+ 	    UPDATE jwf_workitem 
+ 	    SET Name = #{name}, TaskID = #{taskID}, State = #{state}, Created = TO_DATE(#{created}, 'YYYY-MM-DD HH24:MI:SS') 
+ 	    <if test="deputyID != null and deputyName != null">
+ 	    	, DeputyID = #{deputyID}, DeputyName = #{deputyName}
+ 	    </if>
+ 	    WHERE WorkItemID = #{workItemID}
+ 	</update>
+ 	
+ 	<update id="updateWorkItemForReview" parameterType="hashmap">
+ 	    UPDATE jwf_workitem 
+ 	    SET ProcessID = #{processID}, Name = #{name}, TaskID = #{taskID}, State = #{state}, Created = TO_DATE(#{created}, 'YYYY-MM-DD HH24:MI:SS') 
+ 	    WHERE WorkItemID = #{workItemID}
+ 	</update>
+ 	
+ 	<update id="updateWorkItemForApproveCancel" parameterType="hashmap">
+ 	    UPDATE jwf_workitem 
+ 	    SET Name = #{name}, State = #{state} 
+ 	    WHERE WorkItemID = #{workItemID}
+ 	</update>
+ 	
+ 	<update id="updateWorkItemForDeputy" parameterType="hashmap">
+ 	    UPDATE jwf_workitem 
+ 	    SET DeputyID = '', DeputyName = '' 
+ 	    WHERE TaskID = #{taskID}
+ 	</update>
+ 	
+ 	<update id="updateWorkItemForDateChange" parameterType="hashmap">
+ 	    UPDATE jwf_workitem 
+ 	    SET Created = #{created}, Finished = #{finished}
+ 	    WHERE WorkItemID = #{workItemID}
+ 	</update>
+ 	
+ 	<update id="updateProcess" parameterType="hashmap">
+ 	    UPDATE jwf_process 
+ 	    SET BusinessState = #{businessState}, ProcessState = #{processState}, EndDate = SYSDATE
+ 	    WHERE ProcessID = #{processID}
+ 	    <if test="parentYN != null and parentYN != '' and (parentYN eq 'Y'.toString())">
+ 	    	or ParentProcessID = #{processID}
+ 	    </if>
+ 	</update>
+ 	
+    <update id="updateProcessArchive" parameterType="hashmap">
+ 	    UPDATE jwf_process 
+ 	    SET BusinessState = #{businessState}, ProcessState = #{processState}, EndDate = now(3)
+ 	    WHERE ProcessID = #{processID}
+ 	    <if test="parentYN != null and parentYN != '' and (parentYN eq 'Y'.toString())">
+ 	    	or ParentProcessID = #{processID}
+ 	    </if>
+ 	</update>
+ 	
+ 	<update id="updateProcessBusinessState" parameterType="hashmap">
+ 	    UPDATE jwf_process 
+ 	    SET BusinessState = #{businessState}, ProcessState = #{processState}
+ 	    WHERE ProcessID = #{processID}
+ 	</update>
+ 	
+ 	<update id="updateProcessState" parameterType="hashmap">
+ 	    UPDATE jwf_process 
+ 	    SET ProcessState = #{processState}
+ 	    WHERE ProcessID = #{processID}
+ 	</update>
+ 	
+	<update id="updateProcessForWithdraw" parameterType="hashmap">
+ 	    UPDATE jwf_process 
+ 	    SET ProcessState = #{processState}, EndDate = SYSDATE
+ 	    <choose>
+			<when test="processID != null and processID != '' ">
+				WHERE processID = #{processID}
+			</when>
+			<otherwise>
+				WHERE FormInstID = #{formInstID}
+			</otherwise>
+		</choose>
+ 	</update>
+ 	
+	<update id="updateProcessForSubject" parameterType="hashmap">
+ 	    UPDATE jwf_process 
+ 	    SET DocSubject = #{subject}
+ 	    WHERE FormInstID = #{formInstID}
+ 	</update>
+ 	
+ 	<insert id="insertProcessArchive" parameterType="hashmap">
+ 		update jwf_process
+  			set formName = #{formName}, 
+  			formPrefix = #{formPrefix}, 
+  			divisionKind = #{divisionKind},
+  			docFolder = #{docFolder},
+  			docFolderName = #{docFolderName},
+  			saveTermExpired = #{saveTermExpired},
+  			ownerUnitID = #{ownerUnitID},
+  			entCode = #{entCode}
+  		where ProcessID = #{processID}
+    </insert>
+    
+ 	<insert id="insertProcessDescriptionArchive" parameterType="hashmap">
+ 		UPDATE jwf_processdescription a
+ 		SET a.DocNo = a.Reserved1
+ 		WHERE EXISTS (
+ 			SELECT 'x' FROM jwf_process b
+ 			WHERE b.processdescriptionid = a.processdescriptionid
+ 			AND b.processid = #{processID}
+ 		)
+    </insert>
+    
+ 	<insert id="insertWorkitemArchive" parameterType="hashmap">
+ 		MERGE INTO jwf_workitem A
+ 		USING (
+	 	    SELECT A.WorkitemID, 
+	 	    	CASE B.SubKind WHEN 'R' THEN 'REQCMP' ELSE B.SubKind END AS SubKind, 
+	 	    	CASE A.BusinessData2 WHEN 'BATCH' THEN 'Y' ELSE 'N' END AS IsBatch, 
+	 	    	CASE A.BusinessData2 WHEN 'MOBILE' THEN 'Y' ELSE 'N' END AS IsMobile, 
+	 	    	C.DeleteDate, #{piBusinessState} AS PIBusinessState, C.EndDate 
+    	FROM jwf_workitem A 
+    	JOIN jwf_performer B ON A.WorkitemID=B.WorkitemID 
+    	JOIN jwf_process C ON A.ProcessID=C.ProcessID
+    	WHERE A.ProcessID = #{processID} 
+    	<choose>
+            <when test='subkindList != null'>
+                AND B.SubKind NOT IN 
+                <foreach collection="subkindList" item="item" index="index" separator="," open="(" close=")">
+                    #{item}
+                </foreach>
+            </when>
+        </choose>
+        AND B.State != 2
+        <!-- 지정반려한 이력이 화면에 표시되어 조건 추가함. -->
+        <![CDATA[
+        	AND	A.State < 530 
+		]]> 
+ 		) S
+ 		ON (
+ 			A.WorkItemID = S.WorkItemID
+ 		)
+ 		WHEN MATCHED THEN
+	 		UPDATE SET A.SubKind =  S.SubKind,
+	 			A.IsBatch = S.IsBatch,
+	 			A.IsMobile = S.IsMobile,
+	 			A.PIDeleted = S.PIDeleted,
+	 			A.PIBusinessState = S.PIBusinessState,
+	 			A.PIFinished = S.PIFinished
+    </insert>
+    
+ 	<insert id="insertWorkitemDescriptionArchive" parameterType="hashmap"><!-- deprecated -->
+ 	    INSERT INTO covi_approval4j_archive.jwf_workitemdescriptionarchive
+ 	    SELECT a.* 
+ 	    from jwf_workitemdescription a 
+ 	    join jwf_workitem b on a.WorkItemDescriptionID = b.WorkItemDescriptionID
+ 	    join jwf_performer c on b.WorkitemID=c.WorkitemID 
+    	where b.ProcessID = #{processID} 
+    	<choose>
+            <when test='subkindList != null'>
+                AND c.SubKind NOT IN 
+                <foreach collection="subkindList" item="item" index="index" separator="," open="(" close=")">
+                    #{item}
+                </foreach>
+            </when>
+        </choose>
+        AND c.State != 2
+    </insert>
+    
+ 	<insert id="insertDomainArchive" parameterType="hashmap">
+    </insert> 	
+ 	
+ 	<select id="selectReceiptPersonInfo" parameterType="hashmap" resultType="hashmap">
+        SELECT 
+			BG.DeptCode AS "DeptID"
+			, BG.DeptName AS "DeptName"
+			, BG.JobLevelCode + ';' + BG.JobLevelName AS "JobLevel"
+			, BG.JobTitleCode + ';' + BG.JobTitleName AS "JobTitle"
+			, BG.JobPositionCode + ';' + BG.JobPositionName AS "JobPosition"
+		FROM sys_object_user U
+		JOIN sys_object_user_basegroup BG ON U.UserCode = BG.UserCode
+		WHERE U.UserCode = #{urCode}
+    </select>
+    
+ 	<select id="selectDeputy" parameterType="hashmap" resultType="hashmap">
+		<!-- [2019-02-19 MOD] gbhwang 대결 설정 시 옵션 추가 -->
+		<![CDATA[
+		SELECT COUNT(*) OVER() AS "Count", DeputyCode AS "DeputyCode", DeputyName AS "DeputyName", DeputyOption AS "DeputyOption"
+		FROM sys_object_user_approval
+		WHERE UserCode = #{urCode} and UseDeputy = 'Y' and SUBSTR(#{today},0,10) >= DeputyFromDate and SUBSTR(#{today},0,10) <= DeputyToDate
+		]]> 
+    </select>
+    
+ 	<select id="selectDeputyCount" parameterType="hashmap" resultType="Integer">
+ 	    <![CDATA[ 
+		SELECT COUNT(*) OVER() AS "Count"
+		FROM jwf_workitem 
+		WHERE TaskID = #{taskID} and (DeputyID is NOT NULL AND DeputyID <> '')
+		]]>
+    </select>
+ 	
+ 	<insert id="insertFormInstance" parameterType="hashmap">	
+		INSERT INTO jwf_forminstance (
+			ProcessID,
+			FormID,
+			SchemaID,
+			Subject,
+			InitiatorID,
+			InitiatorName,
+			InitiatorUnitID,
+			InitiatorUnitName,
+			InitiatedDate,
+			CompletedDate,
+			DeletedDate,
+			LastModifiedDate,
+			LastModifierID,
+			EntCode,
+			EntName,
+			DocNo,
+			DocLevel,
+			DocClassID,
+			DocClassName,
+			DocSummary,
+			IsPublic,
+			SaveTerm,
+			AttachFileInfo,
+			AppliedDate,
+			AppliedTerm,
+			ReceiveNo,
+			ReceiveNames,
+			ReceiptList,
+			BodyType,
+			BodyContext,
+			BodyContextOrg,
+			DocLinks
+		)
+		VALUES (
+			#{processID},		
+			#{formID},
+			#{schemaID},
+			#{subject},
+			#{initiatorID},
+			#{initiatorName},
+			#{initiatorUnitID},
+			#{initiatorUnitName},
+			SYSDATE,
+			null,
+			null,
+			null,
+			null,
+			#{entCode},
+			#{entName},
+			#{docNo},
+			#{docLevel},
+			#{docClassID},
+			#{docClassName},
+			#{docSummary},
+			#{isPublic},
+			#{saveTerm},
+			#{attachFileInfo},
+			#{appliedDate},
+			#{appliedTerm},
+			#{receiveNo},
+			#{receiveNames},
+			#{receiptList},
+			#{bodyType},
+			'${bodyContext}',
+			'${bodyContextOrg}',
+			#{docLinks}
+		)
+		<selectKey keyProperty="FormInstID" resultType="Integer" order="AFTER">
+		    SELECT JWF_FORMINSTANCE_SEQ.CURRVAL FROM dual
+		</selectKey>
+	</insert>
+ 	
+ 	<insert id="insertFormsTempInstBox" parameterType="hashmap">	
+		INSERT INTO jwf_formstempinstbox (
+			FormInstID,
+			FormID,
+			SchemaID,
+			FormPrefix,
+			FormInstTableName,
+			UserCode,
+			CreatedDate,
+			Subject,
+			Kind
+		)
+		VALUES
+		(
+			#{formInstID},
+			#{formID},
+			#{schemaID},
+			#{formPrefix},
+			#{formInstTableName},
+			#{userCode},
+			SYSDATE,
+			#{subject},
+			#{kind}
+		)
+		<selectKey keyProperty="FormTempInstBoxID" resultType="Integer" order="AFTER">
+		     SELECT JWF_FORMSTEMPINSTBOX_SEQ.CURRVAL FROM dual
+		</selectKey>
+	</insert>
+	
+ 	<update id="deleteProcess" parameterType="hashmap">
+ 	    UPDATE jwf_process 
+ 	    SET DeleteDate = SYSDATE
+ 	    WHERE ProcessID = #{processID}
+ 	</update>
+ 	
+ 	<update id="deleteWorkItem" parameterType="hashmap">
+ 	    UPDATE jwf_workitem 
+ 	    SET Deleted =SYSDATE
+ 	    WHERE ProcessID = #{processID}
+ 	</update>
+ 	
+ 	<update id="deleteOneWorkItem" parameterType="hashmap">
+ 	    UPDATE jwf_workitem 
+ 	    SET Deleted = SYSDATE
+ 	    WHERE WorkItemID = #{workitemID}
+ 	</update>
+ 	
+ 	<delete id="deleteOneWorkItemDescription" parameterType="hashmap">
+ 	    DELETE FROM jwf_workitemdescription 
+ 	    WHERE WorkItemDescriptionID = #{workitemDescriptionID}
+ 	</delete>
+ 	
+ 	<delete id="deleteOnePerformer" parameterType="hashmap">
+ 	    DELETE FROM jwf_performer 
+ 	    WHERE PerformerID = #{performerID}
+ 	</delete>
+ 		
+ 	<!-- FOR UPDATE 문 지움, DBMS에서 자동 처리 필요할 경우  row-locking true로 하고 FOR UPDATE 사용  -->
+ 	<!-- [19-04-05] 문서번호 대량발번 시 중복 오류 발생하여 수정함. -->
+ 	<select id="selectSerialNumber" parameterType="hashmap" resultType="Integer">
+ 	    <![CDATA[
+		SELECT NVL(MAX(SerialNumber),0) + 1 as "RESULT" 
+		FROM jwf_documentnumber
+		WHERE DeptCode = #{deptCode}
+		AND DocListType = #{docListType}
+		AND FiscalYear = #{fiscalYear}
+		]]>
+		<!-- FOR UPDATE -->
+    </select>
+    
+ 	<insert id="insertDocumentNumber" parameterType="hashmap">
+		MERGE INTO jwf_documentnumber a
+	    USING DUAL
+	       ON (a.FiscalYear = #{fiscalYear}
+	            and a.DeptCode = #{deptCode}
+	            and a.DocListType = #{docListType} )
+	    WHEN MATCHED THEN
+	        UPDATE SET a.SerialNumber = a.SerialNumber+1
+	    WHEN NOT MATCHED THEN
+	        INSERT (
+				FiscalYear,
+				SerialNumber,
+				DocListType,
+				DeptCode,
+				DeptName,
+				CategoryNumber,
+				DisplayedNumber
+			)
+			VALUES
+			(
+				#{fiscalYear},
+				1,
+				#{docListType},
+				#{deptCode},
+				#{deptName},
+				#{categoryNumber},
+				#{displayedNumber}
+			)
+			
+		<selectKey keyProperty="SerialNumber" resultType="Integer" order="AFTER">
+			<![CDATA[ 
+			SELECT SerialNumber as "SerialNumber" 
+			FROM jwf_documentnumber
+			WHERE DeptCode = #{deptCode}
+			AND DocListType = #{docListType}
+			AND FiscalYear = #{fiscalYear}
+			]]>
+		</selectKey>
+	</insert>
+ 	
+ 	<update id="updateDocumentNumber" parameterType="hashmap">
+ 	    UPDATE jwf_documentnumber 
+ 	    SET DisplayedNumber = #{displayedNumber}
+ 	    WHERE DeptCode = #{deptCode}
+		AND DocListType = #{docListType}
+		AND FiscalYear = #{fiscalYear}
+		AND SerialNumber = #{SerialNumber}
+ 	</update>
+ 	
+ 	<update id="updateFormInstanceForReceiveNo" parameterType="hashmap">
+ 	    UPDATE jwf_processdescription 
+ 	    SET Reserved2 = #{receiveNo}
+ 	    WHERE FormInstID = #{formInstID}
+ 	    <choose>
+			<when test="processDescriptionID != null and processDescriptionID != '' ">
+				AND ProcessDescriptionID = #{processDescriptionID}
+			</when>
+			<when test="processID != null and processID != '' ">
+				AND ProcessDescriptionID = (
+		 	    	SELECT ProcessDescriptionID 
+		 	    	FROM jwf_process
+		 	    	WHERE ProcessID = #{processID}
+		 	    )
+			</when>
+		</choose>
+ 	</update>
+ 	
+ 	<update id="updateFormInstanceForDocNo" parameterType="hashmap">
+ 	    UPDATE jwf_processdescription 
+ 	    SET Reserved1 = #{docNo}, DocNo = #{docNo}
+ 	    WHERE FormInstID = #{formInstID}
+ 	</update>
+ 	
+ 	<select id="selectFormInstance" parameterType="hashmap" resultMap="bodyContext">
+ 	    <![CDATA[ 
+		SELECT BodyContext AS "BodyContext", DocNo AS "DocNo"
+		FROM jwf_forminstance 
+		WHERE FormInstID = #{formInstID}
+		]]>
+    </select>
+ 	
+ 	<select id="selectManager" parameterType="hashmap" resultType="String">
+ 	    <![CDATA[
+		SELECT ManagerCode AS "ManagerCode"
+		FROM sys_object_group
+		WHERE GroupCode = #{grCode} AND IsUse = 'Y' AND (GroupType IN ('Dept', 'Manage','Division','Company'))
+		]]>
+    </select>
+    
+ 	<select id="selectUserInfo" parameterType="hashmap" resultType="hashmap">
+ 	    <![CDATA[ 
+		SELECT ur.UserCode "Code",
+ 			ur.DisplayName "Name",
+ 			bs.JobTitleCode||';'||bs.JobTitleName "JobTitle",
+ 			bs.JobLevelCode||';'||bs.JobLevelName "JobLevel",
+ 			bs.JobPositionCode||';'||bs.JobPositionName "JobPosition",
+ 			MailAddress AS "MailAddress"
+		FROM sys_object_user_basegroup bs
+		INNER JOIN sys_object_user ur ON bs.UserCode = ur.UserCode
+		WHERE ur.UserCode = #{urCode}
+		AND bs.JobType = 'Origin'
+		]]>
+    </select>
+    
+ 	<select id="selectPerformer" parameterType="hashmap" resultType="hashmap">
+ 	    <![CDATA[ 
+ 		SELECT W.WorkItemID AS "WorkItemID", 
+ 			W.UserCode AS "UserCode",
+			W.TaskID AS "TaskID",
+			W.ProcessID AS "ProcessID",
+			W.PerformerID AS "PerformerID",
+			P.SubKind AS "SubKind" 
+		FROM jwf_workitem W
+		INNER JOIN jwf_performer P ON W.WorkItemID = P.WorkitemID
+		WHERE P.SubKind = #{subkind} AND W.ProcessID = #{processID}
+		]]>
+    </select>
+    
+ 	<select id="selectPerformerByWorkItemID" parameterType="hashmap" resultType="hashmap">
+ 	    <![CDATA[ 
+ 		SELECT W.WorkItemID AS "WorkItemID", 
+ 			W.UserCode AS "UserCode",
+			W.TaskID AS "TaskID",
+			W.ProcessID AS "ProcessID",
+			W.PerformerID AS "PerformerID",
+			P.SubKind AS "SubKind" 
+		FROM jwf_workitem W
+		INNER JOIN jwf_performer P ON W.WorkItemID = P.WorkitemID
+		WHERE W.WorkItemID = #{workItemID}
+		]]>
+    </select>
+    
+ 	<select id="selectSubDept" parameterType="hashmap" resultType="hashmap">
+ 		SELECT GroupCode AS "code", DisplayName AS "name"
+ 		FROM sys_object_group
+		WHERE GroupPath LIKE '%' || #{deptCode} || '%'
+		AND GroupType = 'Dept'
+		AND IsUse = 'Y'
+		AND IsDisplay = 'Y'
+		AND GroupCode != #{deptCode}
+ 	</select>
+ 	
+ 	<select id="selectSharePerson" parameterType="hashmap" resultType="hashmap">
+		SELECT P.UserCode as "USERCODE", P.DisplayName as "DISPLAYNAME"
+		FROM jwf_groupmember M
+		INNER JOIN jwf_group G
+			ON M.GroupID = G.GroupID
+		INNER JOIN sys_object_user P 
+			ON M.UserCode=P.UserCode
+		WHERE G.GROUPCode=#{groupCode}
+		AND G.EntCode = #{entCode}
+		AND P.IsUse='Y'
+ 	</select>
+ 	
+ 	<select id="selectShareOU" parameterType="hashmap" resultType="hashmap">
+		SELECT P.GroupCode as "GROUPCODE", P.DisplayName as "DISPLAYNAME"
+		FROM jwf_groupmember M
+		INNER JOIN jwf_group G
+			ON M.GroupID = G.GroupID
+		INNER JOIN sys_object_group P 
+			ON M.UserCode=P.GroupCode
+		WHERE G.GROUPCode=#{groupCode}
+		AND G.EntCode = #{entCode}
+		AND P.IsUse='Y'
+		AND Receivable='1'
+ 	</select>
+ 	
+ 	<select id="selectSignImage" parameterType="hashmap" resultType="hashmap">
+	    SELECT FilePath AS "FilePath" FROM jwf_signimage
+	    WHERE UserCode = #{UserCode} AND IsUse = 'Y'
+	    ORDER BY InsertDate DESC
+	</select>
+	
+	<select id="selectGroupName" parameterType="hashmap" resultType="hashmap">
+	    SELECT A.DisplayName AS "GR_DisplayName",
+				A.ShortName AS "GR_ShortName",
+				B.DisplayName AS "EntName"
+		FROM sys_object_group a
+		INNER JOIN sys_object_domain b
+			ON a.CompanyCode = b.DomainCode
+		WHERE a.GROUPCode = #{groupCode}
+	</select>
+	
+	<insert id="insertEdmsTransferData" parameterType="hashmap">
+		INSERT INTO jwf_edmsmeta 
+		(
+			ProcessId,
+			DraftId,
+			RegDate,
+			EndFlag
+		) 
+		VALUES
+		(
+			#{ProcessId}, 
+			#{DraftId}, 
+			SYSDATE, 
+			#{EndFlag}
+		)
+	</insert>
+	<insert id="insertGovApprovalDataE" parameterType="hashmap">
+    	INSERT INTO JWF_PROCESSGOV
+	           (DOCID
+	           ,ProcessID
+	           ,FormInstID
+	           ,ProcessSubject
+	           ,InitiatorID
+	           ,InitiatorName
+	           ,InitiatorUnitID
+	           ,InitiatorUnitName
+	           ,DocNumber
+	           ,INSERTED
+	           ,BodyContext
+	           ,ApprovalContext
+	           ,AttachInfo
+	           ,LinkURL
+	           ,SignImage
+	           ,SendStatus
+	           ,SendAPIMsg
+	           ,DisplaySendName
+	           ,ReceiverName
+	           ,RECEIVER
+	           ,SendDate
+	           ,SenderID
+	           ,SenderName
+	           ,SenderEnt
+	           ,StampID)
+	     SELECT 
+				null
+				, #{processID}
+				, #{formInstID}
+				, FI.SUBJECT
+				, FI.InitiatorID
+				, FI.InitiatorName
+				, FI.InitiatorUnitID
+				, FI.InitiatorUnitName
+				, #{docNumber}
+				, SYSDATE AS INSERTED
+				, #{bodyContext}
+				, #{domainDataContext}
+				, FI.AttachFileInfo
+				, #{approvalURL}
+				, NULL
+				, 'SENDWAIT'
+				, ''
+				, ''
+				, FM.RECEIVER_NAME
+				, FM.RECEIVER
+				, NULL
+				, ''
+				, ''
+				, FI.EntCode
+				, '106'
+		  FROM JWF_FORMINSTANCE FI
+		  	INNER JOIN WF_FORM_GOVDOCS_001 FM
+		  		ON FI.FORMINSTID = FM.FORMINSTID
+		  WHERE FI.FormInstID = #{formInstID}
+	</insert>
+	
+	<!-- FIXME -->
+	<update id="updateGovApprovalDataE" parameterType="hashmap">
+ 	    UPDATE JWF_PROCESSGOV
+ 	    SET BodyContext = #{bodyContext:CLOB}
+ 	    	,ApprovalContext = #{domainDataContext:CLOB}
+ 	    WHERE UniqueID = #{uniqueID}
+ 	</update>
+ 	
+ 	<!-- FIXME -->
+ 	<insert id="insertFormInstanceMulti" parameterType="hashmap">	
+		INSERT INTO jwf_forminstance (
+			ProcessID,
+			FormID,
+			SchemaID,
+			Subject,
+			InitiatorID,
+			InitiatorName,
+			InitiatorUnitID,
+			InitiatorUnitName,
+			InitiatedDate,
+			CompletedDate,
+			DeletedDate,
+			LastModifiedDate,
+			LastModifierID,
+			EntCode,
+			EntName,
+			DocNo,
+			DocLevel,
+			DocClassID,
+			DocClassName,
+			DocSummary,
+			IsPublic,
+			SaveTerm,
+			AttachFileInfo,
+			AppliedDate,
+			AppliedTerm,
+			ReceiveNo,
+			ReceiveNames,
+			ReceiptList,
+			BodyType,
+			BodyContext,
+			BodyContextOrg,
+			DocLinks 
+		) SELECT 
+			FI.ProcessID,		
+			FI.FormID,
+			FI.SchemaID,
+			SUB.MULTI_TITLE,
+			FI.InitiatorID,
+			FI.InitiatorName,
+			FI.InitiatorUnitID,
+			FI.InitiatorUnitName,
+			FI.InitiatedDate,
+			FI.CompletedDate,
+			FI.DeletedDate,
+			FI.LastModifiedDate,
+			FI.LastModifierID,
+			FI.EntCode,
+			FI.EntName,
+			FI.DocNo,
+			FI.DocLevel,
+			FI.DocClassID,
+			FI.DocClassName,
+			FI.DocSummary,
+			FI.isPublic,
+			SUB.MULTI_KEEP_PERIOD,
+			SUB.MULTI_ATTACH_FILE,
+			FI.AppliedDate,
+			FI.AppliedTerm,
+			null,
+			SUB.MULTI_RECEIVENAMES,
+			SUB.MULTI_RECEIPTLIST,
+			FI.BodyType,
+			FI.bodyContext,
+			FI.bodyContextOrg,
+			SUB.MULTI_LINK_DOC
+		FROM JWF_FORMINSTANCE FI
+		INNER JOIN HWP_MULTI_GOV_SUB SUB
+		ON FI.FORMINSTID = SUB.FORMINSTID
+		WHERE FI.FormInstID = #{formInstID}
+		AND SUB.ROWSEQ = #{rowseq}
+		<selectKey keyProperty="subFormInstID" resultType="Integer" order="AFTER">
+		    SELECT JWF_FORMINSTANCE_SEQ.CURRVAL FROM dual
+		</selectKey>
+	</insert>
+	
+	<!-- FIXME -->
+	<update id="updateSubTableForMultiGov" parameterType="hashmap">
+		UPDATE HWP_MULTI_GOV_SUB
+		SET MULTI_FORM_INST_ID = #{subFormInstID}
+		WHERE FormInstID = #{formInstID}
+		AND ROWSEQ = #{rowseq}
+	</update>
+	
+ 	<select id="selectFormInstanceByProcessID" parameterType="hashmap" resultType="hashmap">
+		SELECT FORMINSTID AS "FormInstID", EndDate AS "EndDate"
+		FROM JWF_PROCESS
+		WHERE ProcessID = #{processID}
+    </select>
+	<update id="updateFormInstanceCompletedDate" parameterType="hashmap">
+		UPDATE JWF_FORMINSTANCE A 
+		SET CompletedDate = #{EndDate}
+		WHERE A.FormInstID = #{formInstID}
+		AND A.CompletedDate IS NULL
+	</update>
+</mapper>

@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:jee="http://www.springframework.org/schema/jee"
+	xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.2.xsd
+       http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.2.xsd
+       http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-3.2.xsd
+       http://www.springframework.org/schema/jee http://www.springframework.org/schema/jee/spring-jee-3.2.xsd
+       http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-3.2.xsd
+       http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc-3.2.xsd">
+
+
+	<bean id="encryptorConfig" class="org.jasypt.encryption.pbe.config.EnvironmentStringPBEConfig">
+		<property name="algorithm" value="PBEWithMD5AndDES" /><!-- 패스워드  인코더에 사용될 hash function 알고리즘 -->
+		<property name="password" value="Devsno1@)17" />
+	</bean>
+
+	<!-- jasyp Encryption password property -->
+	<bean id="encryptor" class="org.jasypt.encryption.pbe.StandardPBEStringEncryptor">
+		<property name="config" ref="encryptorConfig" />
+	</bean>
+
+	<!-- coviFlow db 연결 -->
+	<bean id="engineProperties" class="org.jasypt.spring31.properties.EncryptablePropertyPlaceholderConfigurer">
+		<constructor-arg ref="encryptor" />
+		<property name="locations">
+			<list>
+				<!-- covi_approval4j -->
+				<value>file://${DEPLOY_PATH}/covi_property/activiti-admin.properties</value>
+<!-- 				<value>classpath:/property/activiti-admin.properties</value> -->
+				<!-- for Process handling -->
+<!-- 				<value>file://${DEPLOY_PATH}/covi_property/db.properties</value> -->
+<!-- 				<value>file://${DEPLOY_PATH}/covi_property/activiti_db.properties</value> -->
+<!-- 				<value>file://${DEPLOY_PATH}/covi_property/engine.properties</value> -->
+			</list>
+		</property>
+		<property name="ignoreUnresolvablePlaceholders" value="true" />
+		<property name="ignoreResourceNotFound" value="false" />
+	</bean>
+
+	<bean id="dbPropertiesSet" class="egovframework.covision.coviflow.util.DBPropertiesSet" />
+	<bean id="coviflowPropHelper" class="egovframework.covision.coviflow.util.CoviFlowPropHelper" />
+
+	<!-- JNDI Datasource: covi_approval4j -->
+<!-- 	<bean id="coviFlowDataSource" class="org.springframework.jndi.JndiObjectFactoryBean"> -->
+<!-- 		<property name="jndiName" value="${db.mapper.one.datasource}" /> -->
+<!-- 		<property name="resourceRef" value="true" /> -->
+<!-- 	</bean> -->
+
+	<!-- JNDI Datasource: activiti -->
+	<!-- 
+	<bean id="engineDatasource" class="org.springframework.jndi.JndiObjectFactoryBean">
+		<property name="jndiName" value="${db.mapper.engine.datasource}" />
+	</bean>
+
+	<bean id="activitiTransactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="engineDatasource" />
+	</bean>
+
+	<bean id="transactionManager" class="org.springframework.data.transaction.ChainedTransactionManager">
+		<constructor-arg>
+			<list>
+				<ref bean="activitiTransactionManager" />
+				<ref bean="coviTransactionManager" />
+			</list>
+		</constructor-arg>
+	</bean>
+
+	<bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+		<property name="dataSource" ref="coviFlowDataSource" />
+		<property name="configLocation" value="classpath:/coviflow/mapper-config.xml" />
+		<property name="mapperLocations" value="#{ dbPropertiesSet.getClassPath() }" />
+	</bean>
+
+	<bean id="sqlSession" class="org.mybatis.spring.SqlSessionTemplate" destroy-method="clearCache">
+		<constructor-arg index="0" ref="sqlSessionFactory" />
+	</bean>
+
+	<bean id="coviTransactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="coviFlowDataSource" />
+	</bean>
+
+	<bean id="coviFlowProcessDAO" class="egovframework.covision.coviflow.dao.impl.CoviFlowProcessDAOImpl">
+		<property name="sqlSession" ref="sqlSession" />
+	</bean>
+
+	<bean id="docNumberService" class="egovframework.covision.coviflow.util.DocNumberService"></bean>
+
+	<bean id="userFormType" class="org.activiti.rest.form.UserFormType" />
+	<bean id="processDefinitionFormType" class="org.activiti.rest.form.ProcessDefinitionFormType" />
+	<bean id="monthFormType" class="org.activiti.rest.form.MonthFormType" />
+
+	<bean id="processEngineConfiguration" class="org.activiti.spring.SpringProcessEngineConfiguration">
+		<property name="databaseType" value="${db}" />
+		<property name="dataSource" ref="engineDatasource" />
+		<property name="transactionManager" ref="activitiTransactionManager" />
+		<property name="transactionsExternallyManaged" value="true" />
+
+		<property name="history" value="${engine.history.level}" />
+		<property name="databaseSchemaUpdate" value="false" />
+
+		<property name="customFormTypes">
+			<list>
+				<ref bean="userFormType" />
+				<ref bean="processDefinitionFormType" />
+				<ref bean="monthFormType" />
+			</list>
+		</property>
+	</bean>
+	-->
+</beans>
