@@ -1,0 +1,135 @@
+﻿<!DOCTYPE html>
+<html>
+	<head>
+		<title>Release</title>
+		<meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+
+        <script src="../config/dext_lang.js?ver=3.5.1338512.1800.01" type="text/javascript"></script>
+        <script src="../config/editor_crossdomain_config.js?ver=3.5.1338512.1800.01" type="text/javascript"></script>
+        <script src="../handler/editor_gzip_handler.jsp?ver=3.5.1338512.1800.01&useCache=true&path=../js/editor_core.js" type="text/javascript"></script>
+        <script src="../js/editor_htmlparser.js?ver=3.5.1338512.1800.01" type="text/javascript"></script>
+        <script src="../js/editor_htmlProcess.js?ver=3.5.1338512.1800.01" type="text/javascript"></script>
+        <script src="../js/editor_htmlProcessUtil.js?ver=3.5.1338512.1800.01" type="text/javascript"></script>
+        <script src="../js/jscolor/jscolor.js?ver=3.5.1338512.1800.01" type="text/javascript"></script>        
+
+        <!-- 멀티 에디터 생성 시 lang, skin 값을 다르게 적용할 경우 정상 반영되지 않아 dext_frame_loaded_event 함수안으로 이동. by sj.yoo 19.02.26-->
+        <!--<script type="text/javascript">
+            if (typeof (DEXTTOP.DEXT5) != 'undefined') {
+                if (DEXTTOP.DEXT5.ReleaseVer > '3.5.1125677.1800.01' && DEXTTOP.DEXT5.config.UseLang != 'ko-kr') {
+                    document.write('<link href="../css/editor_' + DEXTTOP.DEXT5.config.UseLang + '.css?ver=' + DEXTTOP.DEXT5.ReleaseVer + '" rel="stylesheet" type="text/css" />');
+                } else {
+                    document.write('<link href="../css/editor.css?ver=' + DEXTTOP.DEXT5.ReleaseVer + '" rel="stylesheet" type="text/css" />');
+                }
+                document.write('<link href="../css/editor_' + DEXTTOP.DEXT5.config.IconName + '.css?ver=' + DEXTTOP.DEXT5.ReleaseVer + '" rel="stylesheet" type="text/css" />');
+            }
+        </script>-->
+
+		<script type="text/javascript">
+			//var local_frame = null;
+            _dext_editor = null;
+
+			function dext_frame_loaded_event(_editor_id, _config, _frame) {
+			    //local_frame = _frame;
+
+			    // 멀티 에디터 생성 시 lang, skin 값을 다르게 적용할 경우 정상 반영되지 않아 상단 스크립트 내용을  dext_frame_loaded_event 함수안으로 이동. by sj.yoo 19.02.26
+			    if (typeof (DEXTTOP.DEXT5) != 'undefined') {
+			        // by sj.yoo 19.02.25
+			        var head = document.getElementsByTagName("head")[0];
+			        var linkNode1 = document.createElement('link');
+
+			        if (DEXTTOP.DEXT5.ReleaseVer > '3.5.1125677.1800.01' && _config.lang != 'ko-kr') {
+			            //document.write('<link href="../css/editor_' + _config.lang + '.css?ver=' + DEXTTOP.DEXT5.ReleaseVer + '" rel="stylesheet" type="text/css" />');
+			            linkNode1.setAttribute('href', "../css/editor_" + _config.lang + ".css?ver=" + DEXTTOP.DEXT5.ReleaseVer);
+			        } else {
+			            // document.write('<link href="../css/editor.css?ver=' + DEXTTOP.DEXT5.ReleaseVer + '" rel="stylesheet" type="text/css" />');
+			            linkNode1.setAttribute('href', "../css/editor.css?ver=" + DEXTTOP.DEXT5.ReleaseVer);
+			        }
+			        linkNode1.setAttribute('rel', "stylesheet");
+			        linkNode1.setAttribute('type', "text/css");
+
+			        head.appendChild(linkNode1);
+
+			        //var iconName = "icon";
+			        //if (_config.style.skinName == "mono") { // mono 스킨일 경우 editor_icon_mono.css 사용할 수 있도록 추가 by sj.yoo 19.02.22
+			        //    iconName = "icon_mono";
+			        //}
+
+			        var linkNode2 = document.createElement('link');
+			        //document.write('<link href="../css/editor_' + iconName + '.css?ver=' + DEXTTOP.DEXT5.ReleaseVer + '" rel="stylesheet" type="text/css" />');
+
+			        // 스킨 별로 아이콘을 따로 가져가지 않고, 설정 값에 따라 적용되도록 수정 by sj.yoo 19.03.07
+			        // linkNode2.setAttribute('href', "../css/editor_" + iconName + ".css?ver=" + DEXTTOP.DEXT5.ReleaseVer);
+			        linkNode2.setAttribute('href', "../css/editor_" + _config.style.iconName + ".css?ver=" + DEXTTOP.DEXT5.ReleaseVer);
+
+			        linkNode2.setAttribute('rel', "stylesheet");
+			        linkNode2.setAttribute('type', "text/css");
+                    head.appendChild(linkNode2);
+
+                    // CustomCssUrl 사용 시 editor_custom.css가 읽히도록 설정 - by JinYoung 2019.08.27
+                    if (_config.style.customCssUrl != '') {
+                        var linkNode3 = document.createElement('link');
+			            linkNode3.setAttribute('href', _config.style.customCssUrl + "?ver=" + DEXTTOP.DEXT5.ReleaseVer);
+			            linkNode3.setAttribute('rel', "stylesheet");
+			            linkNode3.setAttribute('type', "text/css");
+                        head.appendChild(linkNode3);
+                    }
+			    }
+
+
+			function loadJavascript(url, callback) {
+				var head = document.getElementsByTagName("head")[0];
+				var script = document.createElement("script");
+				script.type = "text/javascript";
+
+				if (typeof (callback) === "function") {
+				    var loaded = false;
+				    var _error = false;
+				    script.onreadystatechange = function () { if (this.readyState == 'loaded' || this.readyState == 'complete') { if (loaded || _error) { return; } loaded = true; callback(); } }
+				    script.onload = function () { if (loaded || _error) { return; } loaded = true; callback(); }
+				    // script.onerror = function () { _error = true; alert('ERROR : Cannot load the [' + url + ']'); }
+				    script.onerror = function () { _error = true; }
+				}
+
+				script.src = url;
+				head.appendChild(script);
+			}
+
+			if (_config.useLocalFont == "1") {
+				if (DEXTTOP.DEXT5.browser.ie) {
+				    fn_createDialogHelperObject(_config);
+				}
+			}
+
+            if (_config.plugInUse == "1") {
+                if (DEXTTOP.DEXT5.browser.ie) {
+                	startCreationPluginObject(_config);
+                }
+                else { }
+            }
+
+             try {
+                 var loadEditorFn = function () {
+                     _dext_editor = new DEXT5_EDITOR(_editor_id, _config, _frame); _frame.editor = _dext_editor; _dext_editor.start();
+                    
+                     if (_config.sourceViewtype == "3") {
+                         loadJavascript("../js/editor_pretty.min.js?ver=" + DEXTTOP.DEXT5.ReleaseVer);
+                     }
+                     DEXT5_CONTEXT._config = _config; _config = null; _frame = null;
+                 };
+
+                 loadJavascript("../js/lang/" + _config.lang + ".js?ver=" + DEXTTOP.DEXT5.ReleaseVer, function () {
+                     if ((!DEXTTOP.DEXT5.browser.mobile && (_config.useMouseTableInoutdent || _config.dragResize == "1")) || (DEXTTOP.DEXT5.browser.mobile && _config.useAutoToolbar == '1')) {
+                         loadJavascript("../js/editor_dragresize.min.js?ver=" + DEXTTOP.DEXT5.ReleaseVer, loadEditorFn);
+                     } else {
+                         loadEditorFn();
+                     }
+                 });
+             }
+             catch (e) { alert("ErrCode : 1002"); }
+            }
+		</script>
+	</head>
+	<body style="margin:0px; padding:0px;">
+        <div id="editorContentArea"></div>
+	</body>
+</html>
