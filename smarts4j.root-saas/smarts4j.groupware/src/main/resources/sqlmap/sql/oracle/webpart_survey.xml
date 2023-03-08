@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="webpart.survey">
+	<select id="selectWebpartSurveyList" parameterType="cmap" resultType="cmap">
+		SELECT A.ItemID AS "ItemID"
+			, A.Item AS "Item"
+			, A.QuestionID AS "QuestionID"
+			, B.SurveyID AS "SurveyID"
+			, B.Subject AS "Subject"
+			, B.Description AS "Description"
+			, B.RegistDate AS "RegistDate" 
+			, B.respondentYn AS "respondentYn"
+			, B.totCnt AS "totCnt"
+			, ((SELECT COUNT(AnswerID) 
+			   	  FROM survey_question_item_answer C 
+			   	 WHERE C.ItemID = A.ItemID) / DECODE(totCnt * 100, 0, '', totCnt * 100)) AS rate			   	 
+		  FROM survey_question_item A
+		  JOIN (SELECT A.SurveyID, A.Subject, A.Description, 
+		  			   LOWER(TO_CHAR(A.RegistDate, 'YYYY-MM-DD HH24:MI:SS')) AS RegistDate,
+					   CASE WHEN (SELECT COUNT(RespondentID) 
+					 		  	FROM survey_respondent C 
+							 	WHERE C.SurveyID = A.SurveyID
+							  	AND RespondentCode = #{userId}) <![CDATA[>]]> 0 
+							THEN 'Y'
+							ELSE 'N' 
+							END AS respondentYn,
+					   (SELECT COUNT(AnswerID) 
+					   	  FROM survey_question_item_answer D 
+					   	 WHERE D.SurveyID = A.SurveyID) AS totCnt
+				  FROM survey A
+				  LEFT JOIN survey_question B
+				    ON A.SurveyID = B.SurveyID
+				 WHERE SYSDATE BETWEEN SurveyStartDate AND SurveyEndDate
+				   AND State = 'F'
+				   AND QuestionCount = 1
+				   AND QuestionType = 'S'
+				   AND Fn_SurveyTargetRespondent_R(A.SurveyID, #{userId}) = 'Y'
+				   AND ROWNUM <![CDATA[<=]]> 1
+				 ORDER BY RegistDate DESC
+			   ) B
+		 	ON A.SurveyID = B.SurveyID
+		 ORDER BY rate DESC, ItemNO ASC
+	</select>   
+</mapper>
+

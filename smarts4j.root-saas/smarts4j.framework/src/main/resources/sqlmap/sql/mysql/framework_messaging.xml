@@ -1,0 +1,405 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="framework.messaging">
+
+    <select id="selectDefaultMediaType" parameterType="cmap" resultType="String">
+        <![CDATA[
+			SELECT Reserved1
+			FROM SYS_BASE_CODE sbc
+			WHERE CodeGroup = 'TodoMsgType' AND Code = #{MsgType}
+			AND DomainID = (SELECT DomainID FROM covi_smart4j.sys_base_code WHERE Code = sbc.Code AND CodeGroup = 'TodoMsgType' ORDER BY IF(DomainID = #{DomainID}, 0, 1) LIMIT 1 )
+	    ]]>
+    </select>
+
+    <insert id="insertMsgData" parameterType="cmap" useGeneratedKeys="true" keyProperty="MessagingID"
+            keyColumn="MessagingID">
+        INSERT INTO SYS_MESSAGING
+        (
+        `ServiceType`, `ObjectType`, `ObjectID`, `MsgType`, `MessageID`,
+        `SubMsgID`, `MediaType`, `IsUse`, `IsDelay`,
+        `MessagingSubject`, `MessagingState`, `ApprovalState`, `ApproverCode`, `SubTotalCount`, `SendCount`, `FailCnt`,
+        `SenderCode`, `ReceiverText`, `ReservedDate`,
+        `SendStartDate`, `SendEndDate`, `XSLPath`, `Width`, `Height`, `PopupURL`, `GotoURL`, `MobileURL`, `OpenType`,
+        `MessageContext`, `ReservedStr1`,
+        `ReservedStr2`, `ReservedStr3`, `ReservedStr4`, `ReservedInt1`, `ReservedInt2`, `RegistDate`, `RegisterCode`,
+        `ModifiedDate`, `ModifierCode`, `DeleteDate`, `ThreadType`, MessageTarget
+        )
+        VALUES
+        (
+        #{ServiceType}, #{ObjectType}, #{ObjectID}, #{MsgType}, #{MessageID},
+        #{SubMsgID}, #{MediaType}, #{IsUse}, #{IsDelay}
+        , #{MessagingSubject}, '1', #{ApprovalState}, #{strApproverCode}, #{SubTotalCount}, #{SendCount}
+        , 0 -- 실패건수
+        , IFNULL(#{SenderCode}, 'superadmin')
+        , #{ReceiverText}
+        , IFNULL(#{ReservedDate}, NOW(3))
+        , NULL
+        , NULL
+        , #{XSLPath}
+        , #{Width}
+        , #{Height}
+        , #{PopupURL}
+        , #{GotoURL}
+        , #{MobileURL}
+        , #{OpenType}
+        , #{MessageContext}
+        , #{ReservedStr1}
+        , #{ReservedStr2}
+        , #{ReservedStr3}
+        , #{ReservedStr4}
+        , #{ReservedInt1}
+        , #{ReservedInt2}
+        , NOW(3)-- 등록일자
+        , IFNULL(#{RegistererCode}, 'superadmin') -- 등록자
+        , NULL -- 수정일자
+        , NULL -- 수정자
+        , NULL -- 삭제일자
+        , IFNULL(#{ThreadType}, 'SCHEDULER')
+        ,#{MessageTarget}
+        );
+        <selectKey keyProperty="LastMsgID" resultType="int" order="AFTER">
+            SELECT LAST_INSERT_ID() AS LastMsgID;
+        </selectKey>
+    </insert>
+
+    <insert id="insertMsgData_Target" parameterType="cmap">
+        INSERT INTO SYS_MESSAGING_TARGET (
+        `MessagingID`, `TargetID`, `InfoType`, `TargetObjectType`, `TargetCode`
+        )
+        SELECT
+        #{MessagingID}
+        , @RowNumber := @RowNumber+1
+        , D.InfoType
+        , D.TargetObjectType
+        , D.TargetCode
+        FROM
+        (
+        SELECT InfoType, TargetObjectType, TargetCode
+        FROM (
+        SELECT 'User' AS InfoType
+        , 'UR' AS TargetObjectType
+        , UserCode AS TargetCode
+        FROM SYS_OBJECT_USER
+
+        UNION ALL
+
+        SELECT 'Group' AS InfoType
+        , IF(GroupType = 'Company', 'DN', 'GR') AS TargetObjectType
+        , GroupCode AS TargetCode
+        FROM SYS_OBJECT_GROUP
+        ) A
+        WHERE TargetCode IN
+        <foreach collection="ReceiversCode" item="item" separator="," open="(" close=")">
+            #{item}
+        </foreach>
+
+        ) AS D, (SELECT @RowNumber := 0) AS SWT_TabRow
+        ORDER BY D.TargetObjectType;
+    </insert>
+
+    <insert id="insertMsgData_Sub" parameterType="cmap">
+        INSERT INTO SYS_MESSAGING_SUB (MessagingID, ReceiverCode, SendDate, SuccessState, MediaType, ResultMessage,
+        RetryCount)
+        WITH tempTB AS (
+        WITH TargetTB AS (
+        WITH tt_tbReceivers AS (
+        SELECT DISTINCT UserCode AS ReceiverCode, TargetMedia -- 중복 제거
+        FROM (
+        SELECT UR.UserCode, IFNULL(C.MediaType,IFNULL(#{mMediaType},B.Reserved3)) AS TargetMedia
+        FROM SYS_MESSAGING_TARGET A
+        INNER JOIN SYS_OBJECT_USER UR ON A.TargetCode = UR.UserCode AND A.TargetObjectType = 'UR'
+        INNER JOIN SYS_BASE_CODE B ON CodeGroup = 'TodoMsgType' AND Code = #{MsgType}
+        LEFT JOIN SYS_MESSAGING_SETTING C ON UR.UserCode = C.UserCode AND B.Code = C.ServiceType -- 사용자가 정의 한 타입 테이블
+        WHERE A.MessagingID = #{MessagingID} AND UR.IsUse = 'Y' AND B.IsUse = 'Y'
+        AND B.DomainID = (SELECT DomainID FROM covi_smart4j.sys_base_code WHERE Code = B.Code AND CodeGroup =
+        'TodoMsgType' ORDER BY IF(DomainID = #{DomainID}, 0, 1) LIMIT 1 )
+
+        UNION
+
+        SELECT UR.UserCode, IFNULL(C.MediaType,IFNULL(#{mMediaType},B.Reserved3)) AS TargetMedia
+        FROM SYS_OBJECT_USER UR
+        INNER JOIN SYS_BASE_CODE B ON CodeGroup = 'TodoMsgType' AND Code = #{MsgType}
+        LEFT JOIN SYS_MESSAGING_SETTING C ON UR.UserCode = C.UserCode AND B.Code = C.ServiceType -- 사용자가 정의 한 타입 테이블
+        LEFT JOIN SYS_OBJECT_GROUP_MEMBER GM ON UR.UserCode = GM.UserCode
+        WHERE GM.GroupCode IN( -- 하위부서 인원 전원 가져옴
+        SELECT GroupCode
+        FROM SYS_OBJECT_GROUP GR
+        INNER JOIN SYS_MESSAGING_TARGET A ON CONCAT(';',GR.GroupPath) LIKE CONCAT('%;',A.TargetCode,';%') AND A.InfoType
+        = 'Group'
+        WHERE A.MessagingID = #{MessagingID} AND GR.IsUse = 'Y'
+        )
+        AND UR.IsUse = 'Y'
+        AND B.DomainID = (SELECT DomainID FROM covi_smart4j.sys_base_code WHERE Code = B.Code AND CodeGroup =
+        'TodoMsgType' ORDER BY IF(DomainID = #{DomainID}, 0, 1) LIMIT 1 )
+        ) VW
+        )
+        SELECT #{MessagingID} AS MasterID
+        ,A.ReceiverCode AS ReceiverCode
+        ,A.TargetMedia
+        FROM tt_tbReceivers A
+
+        )
+        SELECT MasterID, ReceiverCode, NULL AS SendDate, 'N', B.Code AS Media, NULL AS ResultMessage, 0
+        FROM TargetTB
+        INNER JOIN SYS_BASE_CODE B ON B.CodeGroup = 'NotificationMedia' AND LOCATE(B.Code,TargetTB.TargetMedia) > 0
+        WHERE B.IsUse = 'Y'
+        AND B.DomainID = (SELECT DomainID FROM covi_smart4j.sys_base_code WHERE Code = B.Code AND CodeGroup =
+        'NotificationMedia' ORDER BY IF(DomainID = #{DomainID}, 0, 1) LIMIT 1 )
+        AND LOCATE(B.Code, #{MediaType}) > 0
+        )
+        SELECT * FROM tempTB
+    </insert>
+
+    <update id="updateMsgData_Sub" parameterType="cmap">
+        UPDATE SYS_MESSAGING
+        SET SubTotalCount = (SELECT COUNT(0) FROM SYS_MESSAGING_SUB WHERE MessagingID = #{MessagingID})
+        WHERE MessagingID = #{MessagingID};
+    </update>
+
+    <select id="selectNeedApprovalNSendAmount" parameterType="cmap" resultType="cmap">
+        SELECT CASE WHEN D.IsNeedEmailAuth+D.IsNeedSMSAuth+D.IsNeedMessengerAuth+D.IsNeedTodoListAuth+D.IsNeedMDMAuth >
+        0 THEN 'Y' ELSE 'N' END AS NeedAuth
+        , D.MailTotalCount+D.SMSTotalCount+D.MessengerTotalCount+D.TodoListTotalCount+D.MDMTotalCount AS SendAmount
+        FROM(
+        SELECT MAX(IsNeedEmailAuth) AS IsNeedEmailAuth
+        ,SUM(MailTotalCount) AS MailTotalCount
+        ,MAX(IsNeedSMSAuth) AS IsNeedSMSAuth
+        ,SUM(SMSTotalCount) AS SMSTotalCount
+        ,MAX(IsNeedMessengerAuth) AS IsNeedMessengerAuth
+        ,SUM(MessengerTotalCount) AS MessengerTotalCount
+        ,MAX(IsNeedTodoListAuth) AS IsNeedTodoListAuth
+        ,SUM(TodoListTotalCount) AS TodoListTotalCount
+        ,MAX(IsNeedMDMAuth) AS IsNeedMDMAuth
+        ,SUM(MDMTotalCount) AS MDMTotalCount
+        FROM(
+        SELECT CASE WHEN B.MediaType = 'MAIL' AND #{intMinCountForEmail} > 0 THEN CASE WHEN #{intMinCountForEmail}
+        <![CDATA[<=]]> B.MediaCount THEN 1 ELSE 0 END ELSE 0 END AS IsNeedEmailAuth
+        ,CASE WHEN B.MediaType = 'MAIL' THEN B.MediaCount ELSE 0 END AS MailTotalCount
+        ,CASE WHEN B.MediaType = 'SMS' AND #{intMinCountForSMS} > 0 THEN CASE WHEN #{intMinCountForSMS} <![CDATA[<=]]>
+        B.MediaCount THEN 1 ELSE 0 END ELSE 0 END AS IsNeedSMSAuth
+        ,CASE WHEN B.MediaType = 'SMS' THEN B.MediaCount ELSE 0 END AS SMSTotalCount
+        ,CASE WHEN B.MediaType = 'MESSENGER' AND #{intMinCountForMessenger} > 0 THEN CASE WHEN
+        #{intMinCountForMessenger} <![CDATA[<=]]> B.MediaCount THEN 1 ELSE 0 END ELSE 0 END AS IsNeedMessengerAuth
+        ,CASE WHEN B.MediaType = 'MESSENGER' THEN B.MediaCount ELSE 0 END AS MessengerTotalCount
+        ,CASE WHEN B.MediaType = 'TODOLIST' AND #{intMinCountForTodoList} > 0 THEN CASE WHEN #{intMinCountForTodoList}
+        <![CDATA[<=]]> B.MediaCount THEN 1 ELSE 0 END ELSE 0 END AS IsNeedTodoListAuth
+        ,CASE WHEN B.MediaType = 'TODOLIST' THEN B.MediaCount ELSE 0 END AS TodoListTotalCount
+        ,CASE WHEN B.MediaType = 'MDM' AND #{intMinCountForMDM} > 0 THEN CASE WHEN #{intMinCountForMDM} <![CDATA[<=]]>
+        B.MediaCount THEN 1 ELSE 0 END ELSE 0 END AS IsNeedMDMAuth
+        ,CASE WHEN B.MediaType = 'MDM' THEN B.MediaCount ELSE 0 END AS MDMTotalCount
+        FROM
+        (
+        SELECT A.MediaType, COUNT(*) AS MediaCount
+        FROM SYS_MESSAGING_SUB AS A
+        WHERE 1 = 1 AND A.MessagingID = #{MessagingID}
+        GROUP BY A.MediaType
+        ) AS B
+        ) AS C
+        ) AS D;
+    </select>
+
+    <update id="updateMsgApvStatus" parameterType="cmap">
+        UPDATE SYS_MESSAGING
+        SET ApprovalState = CASE WHEN #{NeedAuth} = 'Y' THEN 'W' ELSE 'P' END
+        , SubTotalCount = IFNULL(#{SendAmount},0)
+        , ApproverCode = CASE WHEN #{NeedAuth} = 'Y' THEN '' ELSE NULL END
+        WHERE MessagingID = #{MessagingID}
+        AND IsUse = 'Y'
+        AND MessagingState = 1
+        AND ApprovalState <![CDATA[<>]]> 'W'
+        AND DeleteDate IS NULL;
+    </update>
+
+    <update id="cancelMsg" parameterType="cmap">
+        UPDATE SYS_MESSAGING
+        SET DeleteDate = NOW(3)
+        , MessagingState = 4
+        , ApprovalState = 'P'
+        WHERE MessagingID = #{MessagingID}
+    </update>
+
+    <update id="updateMsgData" parameterType="cmap">
+        UPDATE COVI_SMART4J.SYS_MESSAGING
+        SET
+        `ServiceType` = #{ServiceType}
+        , `ObjectType` = #{ObjectType}
+        , `ObjectID` = #{ObjectID}
+        , `MsgType` = #{MsgType}
+        , `MessageID` = #{MessageID}
+        , `SubMsgID` = #{SubMsgID}
+        , `MediaType` = #{MediaType}
+        , `IsUse` = #{IsUse}
+        , `IsDelay` = #{IsDelay}
+        , `MessagingSubject` = #{MessagingSubject}
+        , `MessagingState` = #{MessagingState}
+        , `ApprovalState` = #{ApprovalState}
+        , `ApproverCode` = #{ApproverCode}
+        , `SubTotalCount` = #{SubTotalCount}
+        , `SendCount` = #{SendCount}
+        , `FailCnt` = #{FailCnt}
+        , `SenderCode` = #{SenderCode}
+        , `ReceiverText` = #{ReceiverText}
+        , `ReservedDate` = #{ReservedDate}
+        , `SendStartDate` = #{SendStartDate}
+        , `SendEndDate` = #{SendEndDate}
+        , `XSLPath` = #{XSLPath}
+        , `Width` = #{Width}
+        , `Height` = #{Height}
+        , `PopupURL` = #{PopupURL}
+        , `GotoURL` = #{GotoURL}
+        , `MobileURL` = #{MobileURL}
+        , `OpenType` = #{OpenType}
+        , `MessageContext` = #{MessageContext}
+        , `ReservedStr1` = #{ReservedStr1}
+        , `ReservedStr2` = #{ReservedStr2}
+        , `ReservedStr3` = #{ReservedStr3}
+        , `ReservedStr4` = #{ReservedStr4}
+        , `ReservedInt1` = #{ReservedInt1}
+        , `ReservedInt2` = #{ReservedInt2}
+        , `RegistDate` = #{RegistDate}
+        , `RegisterCode` = #{RegisterCode}
+        , `ModifiedDate` = NOW(3)
+        , `ModifierCode` = #{ModifierCode}
+        , `DeleteDate` = #{DeleteDate}
+        WHERE
+        MessagingID = #{MessagingID}
+    </update>
+
+    <delete id="deleteMsgData" parameterType="cmap">
+        DELETE COVI_SMART4J.SYS_MESSAGING
+        WHERE MessagingID = #{MessagingID}
+    </delete>
+
+    <delete id="deleteMsgData_Target" parameterType="cmap">
+        DELETE COVI_SMART4J.SYS_MESSAGING_TARGET
+        WHERE MessagingID = #{MessagingID}
+    </delete>
+
+    <delete id="deleteMsgData_Sub" parameterType="cmap">
+        DELETE COVI_SMART4J.SYS_MESSAGING_SUB
+        WHERE MessagingID = #{MessagingID}
+        <if test="SubID != null and SubID != '' ">
+            AND SubID = #{SubID}
+        </if>
+    </delete>
+
+    <update id="updateMsgDataMessagingState" parameterType="cmap">
+        UPDATE COVI_SMART4J.SYS_MESSAGING
+        SET
+        MessagingState = #{MessagingState}
+        , DeleteDate = NOW(3)
+        WHERE ServiceType = #{ServiceType}
+        AND ObjectID = #{ObjectID}
+        <if test="ObjectType != null and ObjectType != '' ">
+            <if test="SearchType != null and SearchType != '' and (SearchType eq 'LIKE'.toString())">
+                AND ObjectType LIKE #{ObjectType}
+            </if>
+            <if test="SearchType != null and SearchType != '' and (SearchType eq 'EQ'.toString())">
+                AND ObjectType = #{ObjectType}
+            </if>
+            <!-- <if test="SearchType != null and SearchType != '' and (SearchType eq 'IN'.toString())">
+                AND ObjectType IN ${ObjectType}
+            </if> -->
+        </if>
+        <if test="MessagingID != null and MessagingID != '' ">
+            AND MessagingID = #{MessagingID}
+        </if>
+        AND IFNULL(ReservedDate,RegistDate) <![CDATA[>]]> NOW(3)
+        AND DeleteDate IS NULL
+        AND MessagingState = '1'
+        AND ApprovalState IN('P','A');
+    </update>
+
+    <update id="updateArrMsgDataMessagingState" parameterType="cmap">
+        UPDATE COVI_SMART4J.SYS_MESSAGING
+        SET
+        MessagingState = #{MessagingState}
+        , DeleteDate = NOW(3)
+        WHERE ServiceType = #{ServiceType}
+        AND ObjectID IN
+        <foreach item="item" index="index" collection="arrObjectID" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        <if test="ObjectType != null and ObjectType != '' ">
+            <if test="SearchType != null and SearchType != '' and (SearchType eq 'LIKE'.toString())">
+                AND ObjectType LIKE #{ObjectType}
+            </if>
+            <if test="SearchType != null and SearchType != '' and (SearchType eq 'EQ'.toString())">
+                AND ObjectType = #{ObjectType}
+            </if>
+            <!-- <if test="SearchType != null and SearchType != '' and (SearchType eq 'IN'.toString())">
+                AND ObjectType IN ${ObjectType}
+            </if> -->
+        </if>
+        <if test="MessagingID != null and MessagingID != '' ">
+            AND MessagingID = #{MessagingID}
+        </if>
+        AND IFNULL(ReservedDate,RegistDate) <![CDATA[>]]> NOW(3)
+        AND DeleteDate IS NULL
+        AND MessagingState = '1'
+        AND ApprovalState IN('P','A');
+    </update>
+
+    <insert id="insertMsgData_Sub_individual" parameterType="cmap">
+        INSERT INTO COVI_SMART4J.SYS_MESSAGING_SUB (MessagingID, ReceiverCode, SuccessState,
+        MediaType,RetryCount)
+        VALUES(#{MessagingID},#{target},'N',#{targetMedia},0)
+    </insert>
+
+    <select id="selectTargetMedia" parameterType="cmap" resultType="cmap">
+        SELECT DISTINCT a.UserCode AS ReceiverCode, TargetMedia -- 중복 제거
+        FROM (
+		        SELECT UR.UserCode, IFNULL(C.MediaType,IFNULL(#{mMediaType},B.Reserved3)) AS TargetMedia
+		          FROM SYS_MESSAGING_TARGET A
+		        INNER JOIN SYS_OBJECT_USER UR ON A.TargetCode = UR.UserCode AND A.TargetObjectType = 'UR'
+		        INNER JOIN SYS_BASE_CODE B ON CodeGroup = 'TodoMsgType' AND CODE = #{MsgType}
+		        LEFT JOIN SYS_MESSAGING_SETTING C ON UR.UserCode = C.UserCode AND B.Code = C.ServiceType -- 사용자가 정의 한 타입 테이블
+		        WHERE A.MessagingID = #{MessagingID}  AND UR.IsUse = 'Y' AND B.IsUse = 'Y'
+		
+		        UNION
+		
+		        SELECT UR.UserCode, IFNULL(C.MediaType,IFNULL(#{mMediaType},B.Reserved3)) AS TargetMedia
+		          FROM SYS_OBJECT_USER UR
+		      INNER JOIN SYS_BASE_CODE B ON CodeGroup = 'TodoMsgType' AND Code =#{MsgType}
+		        LEFT JOIN SYS_MESSAGING_SETTING C ON UR.UserCode = C.UserCode AND B.Code = C.ServiceType -- 사용자가 정의 한 타입 테이블
+		        LEFT JOIN SYS_OBJECT_GROUP_MEMBER GM ON UR.UserCode = GM.UserCode
+		        WHERE GM.GroupCode IN( -- 하위부서 인원 전원 가져옴
+			        SELECT GroupCode
+			        FROM SYS_OBJECT_GROUP GR
+			        INNER JOIN SYS_MESSAGING_TARGET A ON CONCAT(';',GR.GroupPath) LIKE CONCAT('%;',A.TargetCode,';%') AND A.InfoType
+			        = 'Group'
+			        WHERE A.MessagingID = #{MessagingID} AND GR.IsUse = 'Y'
+			        )
+		        AND UR.IsUse = 'Y'
+		        ) A
+		<if test="ExceptersCode != null and ExceptersCode.length != 0 ">
+		  left join
+		  	(SELECT UR.UserCode
+		          FROM SYS_OBJECT_USER UR
+		        LEFT JOIN SYS_OBJECT_GROUP_MEMBER GM ON UR.UserCode = GM.UserCode
+		        WHERE GM.GroupCode IN
+				<foreach collection="ExceptersCode" item="item" index="index" separator="," open="(" close=")">
+	                    #{item}
+	            </foreach>
+	        ) c ON A.UserCode = C.UserCode
+		</if>       
+        INNER JOIN SYS_BASE_CODE B ON B.CodeGroup = 'NotificationMedia'
+        WHERE B.IsUse = 'Y'
+        <if test="ExceptersCode != null and ExceptersCode.length != 0 ">
+          AND A.UserCode not in 
+			<foreach collection="ExceptersCode" item="item" index="index" separator="," open="(" close=")">
+                    #{item}
+            </foreach>
+        </if>  
+		<if test="ExceptersCode != null and ExceptersCode.length != 0 ">
+          AND C.UserCode IS NULL
+		</if>
+    </select>
+
+    <update id="updateMsgThreadType" parameterType="cmap">
+        UPDATE SYS_MESSAGING
+        SET ThreadType = 'SCHEDULER'
+        WHERE MessagingID = #{MessagingID}
+    </update>
+</mapper>

@@ -1,0 +1,1359 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="webhardUser.box">
+	
+	<select id="selectBoxCount" parameterType="cmap" resultType="java.lang.Long">
+		/* queryId : webhardUser.box.selectBoxCount */
+		SELECT COUNT(*) FROM (
+			<if	test="folderType != 'Recent'">
+				SELECT	  BOX_UUID AS "box_uid"
+						, A.UUID AS "uid"
+						, FOLDER_NAME AS "name"
+						, BOOKMARK AS "bookmark"
+						, 'folder' AS "fileType"
+						, TO_CHAR(CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS "createdDate"
+						, '-' AS "fileSize"
+				FROM WH_FOLDER_LIST A
+				<if test="folderType != 'Trashbin'">
+					LEFT JOIN (
+						SELECT uuid
+						FROM wh_folder_list
+						WHERE 1 = 1
+							AND DELETED_DATE IS NOT NULL
+							AND BOX_UUID = #{boxUuid}
+					) FL ON A.uuid = FL.uuid AND A.folder_path LIKE '%'||fl.uuid||'%'
+				</if>
+				WHERE 1=1
+				<choose>
+					<when test="folderType == 'Trashbin'">
+						AND DELETED_DATE IS NOT NULL
+						AND TRASHBIN_FLAG = 'R'
+					</when>
+					<otherwise>
+						AND DELETED_DATE IS NULL
+					</otherwise>
+				</choose>
+				<choose>
+					<when test="folderID == '' and folderType != 'Important' and folderType != 'Recent'">
+						AND (PARENT_UUID IS NULL)
+					</when>
+				</choose>
+				<choose>
+					<when test="folderID == '' or folderID == 'ROOT'">
+						AND BOX_UUID IN ( SELECT UUID 
+							FROM WH_BOX_LIST
+							WHERE 1=1
+							AND OWNER_ID = #{userCode}
+						)
+					</when>
+					<otherwise>
+						AND PARENT_UUID = #{folderID}
+					</otherwise>
+				</choose>
+				UNION ALL
+			</if>
+			SELECT	  A.BOX_UUID AS "box_uid"
+					, A.UUID AS "uid"
+					, A.FILE_NAME AS "name"
+					, A.BOOKMARK AS "bookmark"
+					, A.FILE_TYPE AS "fileType"
+					, TO_CHAR(A.CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS "createdDate"
+					, TO_CHAR(A.FILE_SIZE) AS "fileSize"
+			FROM WH_FILE_LIST A
+			LEFT OUTER JOIN WH_FOLDER_LIST B ON B.UUID = A.FOLDER_UUID
+			WHERE 1=1
+			<choose>
+				<when test="folderType == 'Trashbin'">
+					AND A.DELETED_DATE IS NOT NULL
+					AND A.TRASHBIN_FLAG = 'R'
+				</when>
+				<otherwise>
+					AND A.DELETED_DATE IS NULL
+					AND NOT EXISTS (
+						SELECT UUID
+						FROM wh_folder_list
+						WHERE 1=1
+						AND DELETED_DATE IS NOT NULL
+						AND B.FOLDER_PATH LIKE '%' || UUID || '%'
+						AND BOX_UUID = #{boxUuid}
+					)
+				</otherwise>
+			</choose>
+			<choose>
+				<when test="folderID == '' and boxUuid != '' and folderType != 'Important' and folderType != 'Recent'">
+					AND (A.FOLDER_UUID IN ( SELECT FD.UUID
+						FROM WH_BOX_LIST BX
+						INNER JOIN WH_FOLDER_LIST FD ON (FD.BOX_UUID = BX.UUID)
+						WHERE 1=1
+						AND BX.OWNER_ID = #{userCode}
+						AND FD.PARENT_UUID IS NULL
+					)  OR (A.FOLDER_UUID IS NULL AND A.BOX_UUID = #{boxUuid} ))
+				</when>
+				<otherwise>
+					AND (A.FOLDER_UUID IN ( SELECT FD.UUID
+						FROM WH_BOX_LIST BX
+						INNER JOIN WH_FOLDER_LIST FD ON (FD.BOX_UUID = BX.UUID)
+						WHERE 1=1
+						AND BX.OWNER_ID = #{userCode}
+						AND FD.PARENT_UUID IS NULL
+					)  OR (FOLDER_UUID IS NULL AND A.BOX_UUID IN ( SELECT UUID
+							FROM WH_BOX_LIST
+							WHERE 1=1 AND OWNER_ID = #{userCode} ) ))
+				</otherwise>
+			</choose>
+			<choose>
+				<when test="folderID == 'ROOT' and (folderType == 'Important' or folderType == 'Recent' or folderType == 'Trashbin')">
+					AND (A.FOLDER_UUID IN ( SELECT FD.UUID
+					FROM WH_BOX_LIST BX
+					INNER JOIN WH_FOLDER_LIST FD ON (FD.BOX_UUID = BX.UUID)
+					WHERE 1=1
+					AND BX.OWNER_ID = #{userCode}
+					) OR (A.FOLDER_UUID IS NULL AND A.BOX_UUID = #{boxUuid} ))
+				</when>
+				<when test="folderID != null and folderID != '' and folderID != 'ROOT'">
+					AND A.FOLDER_UUID = #{folderID}
+				</when>
+				<otherwise>
+					AND A.FOLDER_UUID IS NULL
+				</otherwise>
+			</choose>
+		) Folder
+		WHERE 1=1
+		<if test="folderType == 'Important'">
+			AND "bookmark" = 'Y'
+		</if>
+		<if	 test="folderType == 'Recent'">
+			AND "createdDate" > TO_CHAR((SYSDATE - 7), 'YYYY-MM-DD HH24:MI:SS')
+		</if>
+		<!-- TODO: 상세 조회 조건 추가 -->
+		<if test="searchText != null and searchText != ''">
+			AND "name" LIKE '%'|| #{searchText} ||'%'
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND "createdDate" BETWEEN #{startDate} AND #{endDate}
+		</if>
+	</select>
+
+	<select id="selectBoxList" parameterType="cmap" resultType="cmap">
+		/* queryId : webhardUser.box.selectBoxList */
+		<if test="viewType == 'List'">
+			<include refid="oracle.include.pagingHeader"/>
+		</if>
+		SELECT	  "box_uid"
+				, "uid"
+				, "name"
+				, "bookmark"
+				, "auth"
+				, "fileType"
+				, "createdDate"
+				, "fileSize"
+		FROM (
+			<if	test="folderType != 'Recent'">
+				SELECT BOX_UUID AS "box_uid"
+					, A.UUID AS "uid"
+					, FOLDER_NAME AS "name"
+					, BOOKMARK AS "bookmark"
+					, FOLDER_GRANT AS "auth"
+					, 'folder' AS "fileType"
+					, TO_CHAR(CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS "createdDate"
+					, '-' AS "fileSize"
+				FROM WH_FOLDER_LIST A
+				<if test="folderType != 'Trashbin'">
+					LEFT JOIN (
+						SELECT uuid
+						FROM wh_folder_list
+						WHERE 1 = 1
+							AND DELETED_DATE IS NOT NULL
+					) FL ON A.uuid = FL.uuid AND A.folder_path LIKE '%' || fl.uuid || '%'
+				</if>
+				WHERE 1=1
+				<choose>
+					<when test="folderType == 'Trashbin'">
+						AND DELETED_DATE IS NOT NULL
+						AND TRASHBIN_FLAG = 'R'
+					</when>
+					<otherwise>
+						AND DELETED_DATE IS NULL
+					</otherwise>
+				</choose>
+				<choose>
+					<when test="folderID == '' and folderType != 'Important' and folderType != 'Recent'">
+						AND (PARENT_UUID IS NULL)
+					</when>
+				</choose>
+				<choose>
+					<when test="folderID == '' or folderID == 'ROOT'">
+						AND BOX_UUID IN (
+							SELECT UUID
+							FROM WH_BOX_LIST
+							WHERE 1=1
+							AND OWNER_ID = #{userCode}
+						)
+					</when>
+					<otherwise>
+						AND PARENT_UUID = #{folderID}
+					</otherwise>
+				</choose>
+				UNION ALL
+			</if>
+			SELECT	  A.BOX_UUID AS "box_uid"
+					, A.UUID AS "uid"
+					, A.FILE_NAME AS "name"
+					, A.BOOKMARK AS "bookmark"
+					, A.FILE_GRANT AS "auth"
+					, A.FILE_TYPE AS "fileType"
+					, TO_CHAR(A.CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS "createdDate"
+					, TO_CHAR(A.FILE_SIZE) AS "fileSize"
+			FROM WH_FILE_LIST A
+			LEFT OUTER JOIN WH_FOLDER_LIST B ON B.UUID = A.FOLDER_UUID
+			WHERE 1=1
+			<choose>
+				<when test="folderType == 'Trashbin'">
+					AND A.DELETED_DATE IS NOT NULL
+					AND A.TRASHBIN_FLAG = 'R'
+				</when>
+				<otherwise>
+					AND A.DELETED_DATE IS NULL
+					AND NOT EXISTS (
+						SELECT UUID
+						FROM wh_folder_list
+						WHERE 1=1
+						AND DELETED_DATE IS NOT NULL
+						AND B.FOLDER_PATH LIKE '%' || UUID || '%'
+					)
+				</otherwise>
+			</choose>
+			<choose>
+				<when test="folderID == '' and folderType != 'Important' and folderType != 'Recent'">
+					AND (A.FOLDER_UUID IN ( SELECT FD.UUID
+						FROM WH_BOX_LIST BX
+						INNER JOIN WH_FOLDER_LIST FD ON (FD.BOX_UUID = BX.UUID)
+						WHERE 1=1
+						AND BX.OWNER_ID = #{userCode}
+						AND FD.PARENT_UUID IS NULL
+					)  OR (A.FOLDER_UUID IS NULL AND A.BOX_UUID = #{boxUuid} ))
+				</when>
+			</choose>
+			<choose>
+				<when test="folderID == 'ROOT' and (folderType == 'Important' or folderType == 'Recent' or folderType == 'Trashbin')">
+					AND (A.FOLDER_UUID IN ( SELECT FD.UUID
+					FROM WH_BOX_LIST BX
+					INNER JOIN WH_FOLDER_LIST FD ON (FD.BOX_UUID = BX.UUID)
+					WHERE 1=1
+					AND BX.OWNER_ID = #{userCode}
+					) OR (A.FOLDER_UUID IS NULL AND A.BOX_UUID = #{boxUuid} ))
+				</when>
+				<when test="folderID != null and folderID != '' and folderID != 'ROOT'">
+					AND A.FOLDER_UUID = #{folderID}
+				</when>
+				<otherwise>
+					AND A.FOLDER_UUID IS NULL
+				</otherwise>
+			</choose>
+		) Folder
+		WHERE 1=1
+		<if test="folderType == 'Important'">
+			AND "bookmark" = 'Y'
+		</if>
+		<if	 test="folderType == 'Recent'">
+			AND "createdDate" > TO_CHAR((SYSDATE - 7), 'YYYY-MM-DD HH24:MI:SS')
+		</if>
+		<!-- TODO: 상세 조회 조건 추가 -->
+		<if test="searchText != null and searchText != ''">
+			AND "name" LIKE '%'|| #{searchText} ||'%'
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND "createdDate" BETWEEN #{startDate} AND #{endDate}
+		</if>
+		<trim prefix="ORDER BY" prefixOverrides=",">
+			<if test="sortColumn == '' or sortColumn == null or sortDirection == '' or sortDirection == null">
+				(CASE WHEN "fileType" = 'folder' THEN 0 ELSE 1 END) ASC, "createdDate" DESC
+			</if>
+			<if test="sortColumn != null and sortColumn != '' and sortDirection != null and sortDirection !=''">
+				<choose>
+					<when test='sortColumn.equalsIgnoreCase("box_uid")'>"box_uid"</when>
+					<when test='sortColumn.equalsIgnoreCase("uid")'>"uid"</when>
+					<when test='sortColumn.equalsIgnoreCase("name")'>"name"</when>
+					<when test='sortColumn.equalsIgnoreCase("bookmark")'>"bookmark"</when>
+					<when test='sortColumn.equalsIgnoreCase("auth")'>"auth"</when>
+					<when test='sortColumn.equalsIgnoreCase("fileType")'>"fileType"</when>
+					<when test='sortColumn.equalsIgnoreCase("fileSize")'>"fileSize"</when>
+					<otherwise>"createdDate"</otherwise>
+				</choose>
+				<choose>
+					<when test='sortDirection.equalsIgnoreCase("ASC")'> ASC</when>
+					<otherwise> DESC</otherwise>
+				</choose>
+			</if>
+		</trim>
+		<if test="viewType == 'List'">
+			<include refid="oracle.include.pagingFooter"/>
+		</if>
+	</select>
+	
+	<select id="selectFolderList" parameterType="cmap" resultType="cmap">
+		SELECT	  FD.SEQ AS "seq"
+				, FD.UUID AS "uid"
+				, FD.BOX_UUID AS "boxUuid"
+				, FD.PARENT_UUID AS "parentID"
+				, FD.FOLDER_NAME AS "name"
+				, FD.FOLDER_GRANT AS "folderGrant"
+				, FD.FOLDER_NAME_PATH AS "folderNamePath"
+				, FD.FOLDER_PATH AS "folderPath"
+				, (SELECT COUNT(0) FROM wh_folder_list self WHERE self.PARENT_UUID = FD.UUID AND self.DELETED_DATE IS NULL) AS "hasChild"			
+		FROM wh_folder_list FD
+		INNER JOIN wh_box_list BOX ON BOX.UUID = FD.BOX_UUID 
+		WHERE FD.DELETED_DATE IS NULL
+		AND BOX.OWNER_TYPE = 'U' 
+		AND BOX.DOMAIN_id = #{domainID} 
+		AND BOX.OWNER_ID = #{userCode}
+		AND BOX.DELETED_DATE IS NULL
+		AND USE_YN = 'Y'
+	</select>
+	
+	<select id="selectSharedMember" parameterType="cmap" resultType="cmap">
+		SELECT	  S.SHARED_OWNER_ID AS "sharedOwnerID"
+				, S.SHARED_GRANT_TYPE AS "sharedGrantType"
+				, (CASE WHEN S.SHARED_GRANT_TYPE = 'UR' THEN U.MultiDisplayName ELSE G.MultiDisplayName END) AS "sharedOwnerName"
+				, (CASE WHEN S.SHARED_GRANT_TYPE = 'UR' THEN UB.MultiJobLevelName ELSE '' END) AS "sharedOwnerJobLevelName"
+				, (CASE WHEN S.SHARED_GRANT_TYPE = 'UR' THEN UB.MultiJobPositionName ELSE  '' END) AS "sharedOwnerJobPositionName"
+				, (CASE WHEN S.SHARED_GRANT_TYPE = 'UR' THEN UB.MultiJobTitleName ELSE  '' END) AS "sharedOwnerJobTitleName"							
+				, (CASE WHEN S.SHARED_GRANT_TYPE = 'UR' THEN UB.MultiDeptName ELSE  '' END) AS "sharedOwnerDeptName"
+				, (CASE WHEN S.SHARED_GRANT_TYPE = 'UR' THEN U.PhotoPath ELSE '' END) AS "sharedOwnerPhotoPath"
+		FROM wh_shared_list S
+		LEFT JOIN sys_object_user U ON S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = U.UserCode AND U.IsUse = 'Y' AND U.IsDisplay = 'Y'
+		LEFT JOIN sys_object_user_basegroup UB ON U.UserCode = UB.UserCode AND UB.JobType = 'Origin'
+		LEFT JOIN sys_object_group G ON S.SHARED_GRANT_TYPE != 'UR' AND S.SHARED_OWNER_ID = G.GroupCode AND G.IsUse = 'Y'AND G.IsDisplay = 'Y'
+		WHERE S.SHARED_TYPE = #{sharedType}
+		AND SHARED_UUID =  #{sharedID}
+		AND S.SHARED_STATUS = 'ON'
+		AND S.DELETED_DATE IS NULL
+	</select>
+	
+	<select id="getBoxSizeAndRate" parameterType="cmap" resultType="cmap">
+		SELECT	  A.BOX_MAX_SIZE
+				, NVL(B.CURRENT_SIZE_BYTE, 0) AS CURRENT_SIZE_BYTE
+				, NVL(B.CURRENT_SIZE, 0) AS CURRENT_SIZE
+				, NVL(ROUND((B.CURRENT_SIZE / A.BOX_MAX_SIZE) * 100, 1), 0) AS RATE
+		FROM wh_box_list A
+		LEFT OUTER JOIN  (
+			SELECT	  SUM(FILE_SIZE) AS CURRENT_SIZE_BYTE
+					, ROUND(SUM(FILE_SIZE) / (1024 * 1024), 0) AS CURRENT_SIZE
+					, BOX_UUID AS UUID
+			FROM wh_file_list
+			WHERE TRASHBIN_FLAG != 'D' OR TRASHBIN_FLAG IS NULL
+			GROUP BY BOX_UUID
+		) B ON A.UUID = B.UUID
+		WHERE A.UUID = #{boxUuid}
+	</select>
+	
+	<select id="selectPrevFolder" parameterType="cmap" resultType="cmap">
+		SELECT NVL(PF.UUID, 'ROOT') AS "FolderID" , PF.FOLDER_NAME AS "FolderName"
+		FROM wh_folder_list F
+		INNER JOIN wh_folder_list PF ON F.PARENT_UUID = PF.UUID
+		WHERE F.UUID = #{folderID}
+		<choose>
+			<when test="folderType == 'Trashbin'">
+				AND PF.DELETED_DATE IS NOT NULL
+			</when>
+			<otherwise>
+				AND PF.DELETED_DATE IS NULL
+			</otherwise>
+		</choose>
+		<if test="folderType == 'Recent'">
+			AND 1 != 1
+		</if>
+		<if test="folderType == 'Important'">
+			AND PF.BOOKMARK = 'Y'
+		</if>
+		<if	test="folderType == 'Shared'"> <!-- 공유받은 폴더  -->
+			AND EXISTS (SELECT S.SEQ
+						FROM wh_shared_list S
+						WHERE  S.SHARED_TYPE = 'FOLDER'
+						AND S.DELETED_DATE IS NULL
+						AND S.SHARED_UUID = PF.UUID
+						AND (
+								(S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) 
+								OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>)
+							)
+						)
+		</if>
+		<if test="folderType == 'Published'">  <!-- 공유한 폴더  -->
+				AND EXISTS (SELECT S.SEQ
+							FROM wh_shared_list S
+							WHERE  S.SHARED_TYPE = 'FOLDER'
+							AND S.DELETED_DATE IS NULL
+							AND S.SHARED_UUID = PF.UUID
+							)
+		</if>
+	</select>
+	
+	<select id="getUserDriveList" parameterType="cmap" resultType="cmap">
+		/* queryId : webhardUser.box.getUserDriveList */
+		SELECT	  '' AS GROUP_CODE
+				, BOX.UUID AS BOX_UUID
+				, BOX.OWNER_ID
+				, BOX.BOX_NAME
+				, BOX.DOMAIN_CODE
+				, '' AS UUID
+				, 'U' AS OWNER_TYPE
+				, NVL(BOX.USE_YN, 'N') AS USE_YN
+		FROM (
+			SELECT	  #{userCode} AS OWNER_ID
+					, #{domainCode} AS DOMAIN_CODE
+			FROM DUAL
+		) D
+		LEFT OUTER JOIN wh_box_list BOX
+		ON (
+			D.OWNER_ID = BOX.OWNER_ID
+			AND D.DOMAIN_CODE = BOX.DOMAIN_CODE
+		)
+		
+		UNION ALL
+		
+		SELECT	  sog.GroupCode AS GROUP_CODE
+				, UUID AS BOX_UUID
+				, OWNER_ID
+				, sog.DisplayName AS BOX_NAME
+				, sog.CompanyCode AS DOMAIN_CODE
+				, '' AS UUID
+				, 'G' AS OWNER_TYPE
+				, NVL(wbl.USE_YN, 'N') AS USE_YN
+		FROM sys_object_group sog
+		LEFT OUTER JOIN wh_box_list wbl
+		ON (
+			sog.GroupCode = wbl.OWNER_ID
+			AND sog.CompanyCode = wbl.DOMAIN_CODE
+			AND wbl.OWNER_TYPE = 'G'
+		)
+		WHERE ';' || sog.GroupPath LIKE '%;' || #{deptCode} || ';%'
+		AND sog.IsUse = 'Y'
+		AND sog.GroupType = 'Dept'
+		
+	</select>
+	
+	<select id="getSelectDriveTreeList" parameterType="cmap" resultType="cmap">
+		/* queryID : webhardUser.box.getSelectDriveTreeList */
+		SELECT	  BOX_UUID
+				, UUID
+				, PARENT_UUID
+				, FOLDER_NAME
+				, FOLDER_PATH
+				, FOLDER_NAME_PATH
+				, FOLDER_LEVEL
+				, BOOKMARK
+				, FOLDER_GRANT
+				, TRASHBIN_FLAG
+		FROM wh_folder_list A
+		WHERE 1=1
+		AND BOX_UUID = #{UUID}
+		AND NOT EXISTS (
+			SELECT UUID
+			FROM wh_folder_list
+			WHERE 1=1
+			AND BOX_UUID = #{UUID}
+			AND DELETED_DATE IS NOT NULL
+			AND A.FOLDER_PATH LIKE '%' || UUID || '%'
+		)
+		AND EXISTS (
+			SELECT 'X' FROM wh_box_list wbl
+			LEFT OUTER JOIN sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+			WHERE wbl.UUID = #{UUID}
+			AND (
+				wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+				OR (
+					wbl.OWNER_TYPE = 'G'
+					AND (
+						sog.GroupPath LIKE '%' || #{groupCode} || ';%'
+						OR #{groupPath} LIKE '%' || wbl.OWNER_ID || ';%'
+					)
+				)
+			)
+		)
+		ORDER BY
+			  CASE 
+					WHEN PARENT_UUID IS NULL
+					THEN CREATED_DATE
+					ELSE (
+						SELECT CREATED_DATE
+						FROM wh_folder_list B
+						WHERE B.UUID = A.PARENT_UUID
+					)
+			  END
+			, FOLDER_NAME_PATH
+	</select>
+	
+	<select id="getSelectTreeFileList" parameterType="cmap" resultType="cmap">
+		SELECT	  UUID
+				, BOX_UUID
+				, FOLDER_UUID
+				, FILE_NAME
+				, FILE_TYPE
+				, FILE_CONTENT_TYPE
+				, FILE_SIZE
+				, FILE_GRANT
+				, BOOKMARK
+				, TO_CHAR(CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS CREATED_DATE
+				, TO_CHAR(CREATED_DATE, 'YYYYMMDD') AS "DATE"
+				, UPDATED_DATE
+				, DELETED_DATE
+				, TRASHBIN_FLAG
+				, 'file' AS TYPE
+		FROM WH_FILE_LIST A
+		WHERE BOX_UUID = #{BOX_UUID}
+		<choose>
+			<when test='UUID != null and UUID != ""'>
+				AND FOLDER_UUID = #{UUID}
+			</when>
+			<otherwise>
+				AND FOLDER_UUID IS NULL
+			</otherwise>
+		</choose>
+		AND DELETED_DATE IS NULL
+		<if test='mode != null and mode == "user"'>
+			AND EXISTS (
+				SELECT 'X' FROM wh_box_list wbl
+				LEFT OUTER JOIN sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+				WHERE wbl.UUID = A.BOX_UUID
+				AND (
+					wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+					OR (
+						wbl.OWNER_TYPE = 'G'
+						AND (
+							sog.GroupPath LIKE '%' || #{groupCode} || ';%'
+							OR #{groupPath} LIKE '%' || wbl.OWNER_ID || ';%'
+						)
+					)
+				)
+			)
+		</if>
+	</select>
+	
+	<select id="getSelectTreeFolderList" parameterType="cmap" resultType="cmap">
+		SELECT	  UUID
+				, BOX_UUID
+				, FOLDER_NAME
+				, PARENT_UUID
+				, FOLDER_PATH
+				, FOLDER_NAME_PATH
+				, FOLDER_LEVEL
+				, TO_CHAR(CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS CREATED_DATE
+				, TO_CHAR(CREATED_DATE, 'YYYYMMDD') AS "DATE"
+				, UPDATED_DATE
+				, BOOKMARK
+				, FOLDER_GRANT
+				, TRASHBIN_FLAG
+				, 'folder' AS TYPE
+		FROM WH_FOLDER_LIST A
+		WHERE BOX_UUID = #{BOX_UUID}
+		<choose>
+			<when test='UUID != null and UUID != ""'>
+				AND PARENT_UUID = #{UUID}
+			</when>
+			<otherwise>
+				AND PARENT_UUID IS NULL
+			</otherwise>
+		</choose>
+		AND DELETED_DATE IS NULL
+		<if test='mode != null and mode == "user"'>
+			AND EXISTS (
+				SELECT 'X' FROM wh_box_list wbl
+				LEFT OUTER JOIN sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+				WHERE wbl.UUID = A.BOX_UUID
+				AND (
+					wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+					OR (
+						wbl.OWNER_TYPE = 'G'
+						AND (
+							sog.GroupPath LIKE '%' || #{groupCode} || ';%'
+							OR #{groupPath} LIKE '%' || wbl.OWNER_ID || ';%'
+						)
+					)
+				)
+			)
+		</if>
+	</select>
+	
+	<update id="updateFolderBookmark" parameterType="cmap">
+		UPDATE 	WH_FOLDER_LIST
+		SET	  BOOKMARK = #{BOOKMARK}
+			, UPDATED_DATE = SYSDATE
+		WHERE UUID = #{UUID}
+	</update>
+	
+	<update id="updateFileBookmark" parameterType="cmap">
+		UPDATE 	WH_FILE_LIST
+		SET	  BOOKMARK = #{BOOKMARK}
+			, UPDATED_DATE = SYSDATE
+		WHERE UUID = #{UUID}
+	</update>
+	
+	<select id="getSelectRecentFileList" parameterType="cmap" resultType="cmap"> 
+		SELECT	  UUID
+				, BOX_UUID
+				, FOLDER_UUID
+				, FILE_NAME
+				, FILE_TYPE
+				, FILE_SIZE
+				, FILE_PATH
+				, TO_CHAR(CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS CREATED_DATE
+				, TO_CHAR(CREATED_DATE, 'YYYYMMDD') AS "DATE"
+				, BOOKMARK
+				, 'file' AS TYPE
+		FROM 	WH_FILE_LIST
+		WHERE 	1=1
+		AND		BOX_UUID = #{BOX_UUID}
+		AND		CREATED_DATE &gt; SYSDATE - 7
+		AND		DELETED_DATE IS NULL
+		ORDER BY CREATED_DATE DESC
+	</select>
+	
+	<select id="getSelectImportantFolderList" parameterType="cmap" resultType="cmap">
+		SELECT	  UUID
+				, BOX_UUID
+				, FOLDER_NAME
+				, PARENT_UUID
+				, FOLDER_PATH
+				, FOLDER_NAME_PATH
+				, FOLDER_LEVEL
+				, TO_CHAR(CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS CREATED_DATE
+				, TO_CHAR(CREATED_DATE, 'YYYYMMDD') AS "DATE"
+				, UPDATED_DATE
+				, BOOKMARK
+				, FOLDER_GRANT
+				, TRASHBIN_FLAG
+				, 'folder' AS TYPE
+		FROM 	WH_FOLDER_LIST
+		WHERE 	BOX_UUID 	= #{BOX_UUID}
+		AND		BOOKMARK	= 'Y'
+		AND		DELETED_DATE IS NULL
+	</select>
+	
+	<select id="getSelectImportantFileList" parameterType="cmap" resultType="cmap">
+		SELECT	  UUID
+				, BOX_UUID
+				, FOLDER_UUID
+				, FILE_NAME
+				, FILE_TYPE
+				, FILE_CONTENT_TYPE
+				, FILE_SIZE
+				, FILE_GRANT
+				, BOOKMARK
+				, TO_CHAR(CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS CREATED_DATE
+				, TO_CHAR(CREATED_DATE, 'YYYYMMDD') AS "DATE"
+				, UPDATED_DATE
+				, DELETED_DATE
+				, TRASHBIN_FLAG
+				, 'file' AS TYPE
+		FROM 	WH_FILE_LIST
+		WHERE 	BOX_UUID 	= #{BOX_UUID}
+		AND		BOOKMARK	= 'Y'
+		AND		DELETED_DATE IS NULL
+	</select>
+	
+	<select id="selectBoxPath" parameterType="cmap" resultType="cmap">
+		/* webhardUser.box.selectBoxPath */
+		SELECT	  UUID AS "boxUuid"
+				, DOMAIN_ID AS "domainId"
+				, DOMAIN_CODE AS "domainCode"
+				, OWNER_TYPE AS "ownerType"
+				, OWNER_ID AS "ownerId"
+				, OWNER_NAME AS "ownerName"
+				, BOX_NAME AS "boxName"
+				, BOX_MAX_SIZE AS "boxMaxSize"
+				, BOX_CURRENT_SIZE AS "boxCurrentSiz"
+				, USE_YN AS "useYn"
+				, BLOCK_YN AS "blockYn"
+				, NVL(BLOCK_REASON, '') AS "blockReason"
+				, BOX_PATH AS "boxPath"
+		FROM WH_BOX_LIST
+		WHERE 1=1
+		AND USE_YN = 'Y'
+		AND UUID = #{boxUuid}
+	</select>
+	
+	<select id="selectExtConfig" parameterType="cmap" resultType="String">
+		SELECT NVL(RESTRICTED_EXTENSIONS, '') AS RESTRICTED_EXTENSIONS
+		FROM WH_CONFIG
+		WHERE DOMAIN_ID = #{domainID}
+	</select>
+	
+	<select id="selectDomainMaxUploadSize" parameterType="cmap" resultType="java.lang.Long">
+		SELECT NVL(B.MAX_UPLOAD_SIZE, A.MAX_UPLOAD_SIZE) AS MAX_UPLOAD_SIZE
+		FROM (SELECT 1024 AS MAX_UPLOAD_SIZE FROM DUAL) A
+		LEFT OUTER JOIN(
+			SELECT MAX_UPLOAD_SIZE
+			FROM WH_CONFIG
+			WHERE DOMAIN_ID = #{domainID}
+		) B ON 1=1
+	</select>
+	
+	<select id="selectSharedRootList" parameterType="cmap" resultType="cmap">
+		<if test="viewType == 'List'">
+			<include refid="oracle.include.pagingHeader"/>
+		 </if>
+		SELECT	  "box_uid"
+				, "uid"
+				, "name"
+				, "bookmark"
+				, "auth"
+				, "fileType"
+				, "createdDate"
+				, "fileSize"
+		FROM (
+			SELECT FO.BOX_UUID AS "box_uid"
+							, FO.UUID AS "uid"
+							, FO.FOLDER_NAME AS "name"
+							, FO.BOOKMARK AS "bookmark"
+							, FO.FOLDER_GRANT AS "auth"
+							, 'folder' AS "fileType"
+							, TO_CHAR(FO.CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS "createdDate"
+							, '-' AS "fileSize"
+			FROM wh_shared_list S
+			LEFT JOIN wh_folder_list FO ON  S.SHARED_UUID = FO.UUID 
+			LEFT JOIN wh_shared_list SELF ON SELF.SHARED_UUID = FO.PARENT_UUID AND SELF.DELETED_DATE IS NULL 
+			WHERE ((S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			AND S.SHARED_TYPE = 'FOLDER'
+			AND FO.DELETED_DATE IS NULL
+			AND S.DELETED_DATE IS NULL
+			AND SELF.SEQ IS NULL  <!--  최상위 항목만 조회 -->
+			
+			UNION
+			
+			SELECT F.BOX_UUID AS "box_uid"
+					, F.UUID AS "uid"
+					, F.FILE_NAME AS "name"
+					, F.BOOKMARK AS "bookmark"
+					, F.FILE_GRANT AS "auth"
+					, F.FILE_TYPE AS "fileType"
+					, TO_CHAR(F.CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS "createDate"
+					, TO_CHAR(F.FILE_SIZE) AS "fileSize"
+			FROM wh_shared_list S
+			LEFT JOIN wh_file_list F ON S.SHARED_UUID = F.UUID 
+			LEFT JOIN wh_shared_list FS ON F.FOLDER_UUID = FS.SHARED_UUID AND FS.SHARED_TYPE = 'FOLDER'
+			WHERE ((S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			AND S.SHARED_TYPE = 'FILE'
+			AND S.DELETED_DATE IS NULL
+			AND F.DELETED_DATE IS NULL
+			AND FS.DELETED_DATE IS NULL
+			AND FS.SEQ IS NULL
+		) Folder
+		WHERE 1=1
+		<!-- TODO: 상세 조회 조건 추가 -->
+		<if test="searchText != null and searchText != ''">
+			AND "name" LIKE '%'|| #{searchText} ||'%'
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND "createdDate" BETWEEN #{startDate} AND #{endDate}
+		</if>
+		<trim prefix="ORDER BY" prefixOverrides=",">
+			<if test="sortColumn == '' or sortColumn == null or sortDirection == '' or sortDirection == null">
+				(CASE WHEN "fileType"= 'folder' THEN 0 ELSE 1 END) ASC, "createdDate" DESC
+			</if>
+			<if test="sortColumn != null and sortColumn != '' and sortDirection != null and sortDirection !='' ">
+				<if test="sortColumn == '' or sortColumn == null or sortDirection == '' or sortDirection == null">
+				IF(fileType = 'folder' , 0, 1) ASC, createdDate DESC
+			</if>
+			<if test="sortColumn != null and sortColumn != '' and sortDirection != null and sortDirection !=''">
+		 		<choose>
+					<when test='sortColumn.equalsIgnoreCase("box_uid")'>"box_uid"</when>
+					<when test='sortColumn.equalsIgnoreCase("uid")'>"uid"</when>
+					<when test='sortColumn.equalsIgnoreCase("name")'>"name"</when>
+					<when test='sortColumn.equalsIgnoreCase("bookmark")'>"bookmark"</when>
+					<when test='sortColumn.equalsIgnoreCase("auth")'>"auth"</when>
+					<when test='sortColumn.equalsIgnoreCase("fileType")'>"fileType"</when>
+					<when test='sortColumn.equalsIgnoreCase("fileSize")'>"fileSize"</when>
+					<otherwise>"createDate"</otherwise>
+				</choose>
+				<choose>
+					<when test='sortDirection.equalsIgnoreCase("ASC")'> ASC</when>
+					<otherwise> DESC</otherwise>
+				</choose>
+			</if>
+			</if>
+		</trim>
+		<if test="viewType == 'List'">
+			<include refid="oracle.include.pagingFooter"/>
+		</if>
+	</select>
+	
+	<select id="selectSharedRootListCount" parameterType="cmap" resultType="java.lang.Long">
+			SELECT COUNT(*) FROM (
+				SELECT FO.UUID AS "uid"
+								, FO.FOLDER_NAME AS "name"
+								, 'folder' AS "fileType"
+								, TO_CHAR(FO.CREATED_DATE,'YYYY-MM-DD HH24:MI:SS') AS "createdDate"
+								, '-' AS "fileSize"
+				FROM wh_shared_list S
+				LEFT JOIN wh_folder_list FO ON  S.SHARED_UUID = FO.UUID 
+				LEFT JOIN wh_shared_list SELF ON SELF.SHARED_UUID = FO.PARENT_UUID AND SELF.DELETED_DATE IS NULL 
+				WHERE ((S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+				AND S.SHARED_TYPE = 'FOLDER'
+				AND FO.DELETED_DATE IS NULL
+				AND S.DELETED_DATE IS NULL
+				AND SELF.SEQ IS NULL  <!--  최상위 항목만 조회 -->
+				
+				UNION
+				
+				SELECT F.UUID AS "uid"
+						, F.FILE_NAME AS "name"
+						, F.FILE_TYPE AS "fileType"
+						, TO_CHAR(F.CREATED_DATE,'YYYY-MM-DD HH24:MI:SS') AS "createDate"
+						, TO_CHAR(F.FILE_SIZE) AS "fileSize "
+				FROM wh_shared_list S
+				LEFT JOIN wh_file_list F ON S.SHARED_UUID = F.UUID 
+				LEFT JOIN wh_shared_list FS ON F.FOLDER_UUID = FS.SHARED_UUID AND FS.SHARED_TYPE = 'FOLDER'
+				WHERE ((S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+				AND S.SHARED_TYPE = 'FILE'
+				AND S.DELETED_DATE IS NULL
+				AND F.DELETED_DATE IS NULL
+				AND FS.DELETED_DATE IS NULL
+				AND FS.SEQ IS NULL
+		) Folder
+		WHERE 1=1
+		<!-- TODO: 상세 조회 조건 추가 -->
+		<if test="searchText != null and searchText != ''">
+			AND "name" LIKE '%'|| #{searchText} ||'%'
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND "createdDate" BETWEEN #{startDate} AND #{endDate}
+		</if>
+	</select>
+
+	<select  id="selectSharedList" parameterType="cmap" resultType="cmap">
+		<if test="viewType == 'List'">
+			<include refid="oracle.include.pagingHeader"/>
+		</if>
+		SELECT	  "box_uid"
+				, "uid"
+				, "name"
+				, "bookmark"
+				, "auth"
+				, "fileType"
+				, "createdDate"
+				, "fileSize"
+		FROM (
+			SELECT 	F.BOX_UUID AS "box_uid"
+					, F.UUID AS "uid"
+					, F.FOLDER_NAME AS "name"
+					, F.BOOKMARK AS "bookmark"
+					, F.FOLDER_GRANT AS "auth"
+					, 'folder' AS "fileType"
+					, TO_CHAR(F.CREATED_DATE,'YYYY-MM-DD HH24:MI:SS') AS "createdDate"
+					, '-' AS "fileSize"
+			FROM WH_FOLDER_LIST F
+			LEFT JOIN WH_SHARED_LIST S ON F.UUID = S.SHARED_UUID AND SHARED_TYPE = 'FOLDER' AND S.DELETED_DATE IS NULL AND S.SHARED_STATUS = 'ON' AND ((S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			WHERE F.DELETED_DATE IS NULL
+			AND F.PARENT_UUID = #{folderID}
+			AND S.SEQ IS NOT NULL
+		
+			UNION
+			
+			SELECT F.BOX_UUID AS "box_uid"
+					, F.UUID AS "uid"
+					, F.FILE_NAME AS "name"
+					, F.BOOKMARK AS "bookmark"
+					, F.FILE_GRANT AS "auth"
+					, F.FILE_TYPE AS "fileType"
+					, TO_CHAR(F.CREATED_DATE,'YYYY-MM-DD HH24:MI:SS') AS "createDate"
+					, TO_CHAR(F.FILE_SIZE) AS "fileSize"
+			FROM WH_FILE_LIST F
+			LEFT JOIN WH_SHARED_LIST S ON F.UUID = S.SHARED_UUID AND SHARED_TYPE = 'FILE' AND S.DELETED_DATE IS NULL AND S.SHARED_STATUS = 'ON' AND ((S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			WHERE F.DELETED_DATE IS NULL
+			AND F.FOLDER_UUID = #{folderID}
+			AND S.SEQ IS NOT NULL
+		) Folder
+		WHERE 1=1
+		<!-- TODO: 상세 조회 조건 추가 -->
+		<if test="searchText != null and searchText != ''">
+			AND "name" LIKE '%'|| #{searchText} ||'%'
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND "createdDate" BETWEEN #{startDate} AND #{endDate}
+		</if>
+		<trim prefix="ORDER BY" prefixOverrides=",">
+			<if test="sortColumn == '' or sortColumn == null or sortDirection == '' or sortDirection == null">
+				(CASE WHEN "fileType" = 'folder' THEN 0 ELSE 1 END) ASC, "createdDate" DESC
+			</if>
+			<if test="sortColumn != null and sortColumn != '' and sortDirection != null and sortDirection !=''">
+				<choose>
+					<when test='sortColumn.equalsIgnoreCase("box_uid")'>"box_uid"</when>
+					<when test='sortColumn.equalsIgnoreCase("uid")'>"uid"</when>
+					<when test='sortColumn.equalsIgnoreCase("name")'>"name"</when>
+					<when test='sortColumn.equalsIgnoreCase("bookmark")'>"bookmark"</when>
+					<when test='sortColumn.equalsIgnoreCase("auth")'>"auth"</when>
+					<when test='sortColumn.equalsIgnoreCase("fileType")'>"fileType"</when>
+					<when test='sortColumn.equalsIgnoreCase("fileSize")'>"fileSize"</when>
+					<otherwise>"createDate"</otherwise>
+				</choose>
+				<choose>
+					<when test='sortDirection.equalsIgnoreCase("ASC")'> ASC</when>
+					<otherwise> DESC</otherwise>
+				</choose>
+			</if>
+		</trim>
+		<if test="viewType == 'List'">
+			<include refid="oracle.include.pagingFooter"/>
+		</if>
+	</select>
+	
+	<select  id="selectSharedListCount" parameterType="cmap" resultType="java.lang.Long">
+		SELECT COUNT(*) FROM (
+			SELECT 	F.UUID AS "uid"
+					, F.FOLDER_NAME AS "name"
+					, 'folder' AS "fileType"
+					, TO_CHAR(F.CREATED_DATE,'YYYY-MM-DD HH24:MI:SS') AS "createdDate"
+					, '-' AS "fileSize"
+			FROM WH_FOLDER_LIST F
+			LEFT JOIN WH_SHARED_LIST S ON F.UUID = S.SHARED_UUID AND SHARED_TYPE = 'FOLDER' AND S.DELETED_DATE IS NULL AND S.SHARED_STATUS = 'ON' AND ((S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			WHERE F.DELETED_DATE IS NULL
+			AND F.PARENT_UUID = #{folderID}
+			AND S.SEQ IS NOT NULL
+		
+			UNION
+			
+			SELECT F.UUID AS "uid"
+					, F.FILE_NAME AS "name"
+					, F.FILE_TYPE AS "fileType"
+					, TO_CHAR(F.CREATED_DATE,'YYYY-MM-DD HH24:MI:SS') AS "createDate"
+					, TO_CHAR(F.FILE_SIZE) AS "fileSize"
+			FROM WH_FILE_LIST F
+			LEFT JOIN WH_SHARED_LIST S ON F.UUID = S.SHARED_UUID AND SHARED_TYPE = 'FILE' AND S.DELETED_DATE IS NULL AND S.SHARED_STATUS = 'ON' AND ((S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			WHERE F.DELETED_DATE IS NULL
+			AND F.FOLDER_UUID = #{folderID}
+			AND S.SEQ IS NOT NULL
+		) Folder
+		WHERE 1=1
+		<!-- TODO: 상세 조회 조건 추가 -->
+		<if test="searchText != null and searchText != ''">
+			AND "name" LIKE '%'|| #{searchText} ||'%'
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND "createdDate" BETWEEN #{startDate} AND #{endDate}
+		</if>
+	</select>
+	
+	<select id="selectPublishedRootList" parameterType="cmap" resultType="cmap">
+		<if test="viewType == 'List'">
+			<include refid="oracle.include.pagingHeader"/>
+		</if>
+		SELECT	  "box_uid"
+				, "uid"
+				, "name"
+				, "bookmark"
+				, "auth"
+				, "fileType"
+				, "createdDate"
+				, "fileSize"
+		FROM (
+			SELECT 	FD.BOX_UUID AS "box_uid"
+					, FD.UUID AS "uid"
+					, FD.FOLDER_NAME AS "name"
+					, FD.BOOKMARK AS "bookmark"
+					, FD.FOLDER_GRANT AS "auth"
+					, 'folder' AS "fileType"
+					, TO_CHAR(FD.CREATED_DATE,'YYYY-MM-DD HH24:MI:SS') AS "createdDate"
+					, '-' AS "fileSize"
+			FROM WH_BOX_LIST BX
+			INNER JOIN WH_FOLDER_LIST FD ON FD.BOX_UUID = BX.UUID
+			LEFT JOIN WH_SHARED_LIST S ON FD.UUID = S.SHARED_UUID AND S.SHARED_TYPE = 'FOLDER' AND S.SHARED_STATUS = 'ON' AND S.DELETED_DATE IS NULL
+			LEFT JOIN WH_SHARED_LIST P ON FD.PARENT_UUID = P.SHARED_UUID AND P.SHARED_TYPE = 'FOLDER' AND P.SHARED_STATUS = 'ON' AND P.DELETED_DATE IS NULL
+			WHERE BX.DELETED_DATE IS NULL 
+			AND FD.DELETED_DATE IS NULL
+			AND BX.OWNER_TYPE = 'U' AND BX.OWNER_ID = #{userCode}
+			AND S.SEQ IS NOT NULL
+			AND P.SEQ IS NULL
+			
+			UNION
+			
+			SELECT  FL.BOX_UUID AS "box_uid"
+					, FL.UUID AS "uid"
+					, FL.FILE_NAME AS "name"
+					, FL.BOOKMARK AS "bookmark"
+					, FL.FILE_GRANT AS "auth"
+					, FL.FILE_TYPE AS "fileType"
+					, TO_CHAR(FL.CREATED_DATE,'YYYY-MM-DD HH24:MI:SS') AS "createDate"
+					, TO_CHAR(FL.FILE_SIZE) AS "fileSize"
+			FROM  WH_BOX_LIST BX
+			INNER JOIN WH_FILE_LIST FL ON FL.BOX_UUID = BX.UUID
+			LEFT JOIN WH_SHARED_LIST S ON FL.UUID = S.SHARED_UUID AND S.SHARED_TYPE = 'FILE' AND S.SHARED_STATUS = 'ON' AND S.DELETED_DATE IS NULL
+			LEFT JOIN WH_SHARED_LIST FDS ON FL.FOLDER_UUID = FDS.SHARED_UUID AND FDS.SHARED_TYPE = 'FOLDER' AND FDS.SHARED_STATUS = 'ON' AND FDS.DELETED_DATE IS NULL
+	  		WHERE BX.DELETED_DATE IS NULL 
+			AND FL.DELETED_DATE IS NULL
+			AND BX.OWNER_TYPE = 'U' AND BX.OWNER_ID = #{userCode}
+			AND S.SEQ IS NOT NULL
+	 		AND FDS.SEQ IS NULL
+		)  Folder
+		WHERE 1=1
+		<!-- TODO: 상세 조회 조건 추가 -->
+		<if test="searchText != null and searchText != ''">
+			AND "name" LIKE '%'|| #{searchText} ||'%'
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND "createdDate" BETWEEN #{startDate} AND #{endDate}
+		</if>
+		<trim prefix="ORDER BY" prefixOverrides=",">
+			<if test="sortColumn == '' or sortColumn == null or sortDirection == '' or sortDirection == null">
+				(CASE WHEN "fileType" = 'folder' THEN 0 ELSE 1 END) ASC, "createdDate" DESC
+			</if>
+			<if test="sortColumn != null and sortColumn != '' and sortDirection != null and sortDirection !=''">
+			 	<choose>
+					<when test='sortColumn.equalsIgnoreCase("box_uid")'>"box_uid"</when>
+					<when test='sortColumn.equalsIgnoreCase("uid")'>"uid"</when>
+					<when test='sortColumn.equalsIgnoreCase("name")'>"name"</when>
+					<when test='sortColumn.equalsIgnoreCase("bookmark")'>"bookmark"</when>
+					<when test='sortColumn.equalsIgnoreCase("auth")'>"auth"</when>
+					<when test='sortColumn.equalsIgnoreCase("fileType")'>"fileType"</when>
+					<when test='sortColumn.equalsIgnoreCase("fileSize")'>"fileSize"</when>
+					<otherwise>"createDate"</otherwise>
+				</choose>
+				<choose>
+					<when test='sortDirection.equalsIgnoreCase("ASC")'> ASC</when>
+					<otherwise> DESC</otherwise>
+				</choose>
+			</if>
+		</trim>
+		<if test="viewType == 'List'">
+			<include refid="oracle.include.pagingFooter"/>
+		</if>
+	</select>
+	
+	<select id="selectPublishedRootListCount" parameterType="cmap" resultType="java.lang.Long">
+		SELECT COUNT(*) FROM (
+			SELECT 	FD.UUID AS "uid"
+					, FD.FOLDER_NAME AS "name"
+					, 'folder' AS "fileType"
+					, TO_CHAR(FD.CREATED_DATE,'YYYY-MM-DD HH24:MI:SS') AS "createdDate"
+					, '-' AS "fileSize"
+			FROM WH_BOX_LIST BX
+			INNER JOIN WH_FOLDER_LIST FD ON FD.BOX_UUID = BX.UUID
+			LEFT JOIN WH_SHARED_LIST S ON FD.UUID = S.SHARED_UUID AND S.SHARED_TYPE = 'FOLDER' AND S.SHARED_STATUS = 'ON' AND S.DELETED_DATE IS NULL
+			LEFT JOIN WH_SHARED_LIST P ON FD.PARENT_UUID = P.SHARED_UUID AND P.SHARED_TYPE = 'FOLDER' AND P.SHARED_STATUS = 'ON' AND P.DELETED_DATE IS NULL
+			WHERE BX.DELETED_DATE IS NULL 
+			AND FD.DELETED_DATE IS NULL
+			AND BX.OWNER_TYPE = 'U' AND BX.OWNER_ID = #{userCode}
+			AND S.SEQ IS NOT NULL
+			AND P.SEQ IS NULL
+			
+			UNION
+			
+			SELECT  FL.UUID AS "uid"
+					, FL.FILE_NAME AS "name"
+					, FL.FILE_TYPE AS "fileType"
+					, TO_CHAR(FL.CREATED_DATE,'YYYY-MM-DD HH24:MI:SS') AS "createDate"
+					, TO_CHAR(FL.FILE_SIZE) AS "fileSize"
+			FROM  WH_BOX_LIST BX
+			INNER JOIN WH_FILE_LIST FL ON FL.BOX_UUID = BX.UUID
+			LEFT JOIN WH_SHARED_LIST S ON FL.UUID = S.SHARED_UUID AND S.SHARED_TYPE = 'FILE' AND S.SHARED_STATUS = 'ON' AND S.DELETED_DATE IS NULL
+			LEFT JOIN WH_SHARED_LIST FDS ON FL.FOLDER_UUID = FDS.SHARED_UUID AND FDS.SHARED_TYPE = 'FOLDER' AND FDS.SHARED_STATUS = 'ON' AND FDS.DELETED_DATE IS NULL
+	  		WHERE BX.DELETED_DATE IS NULL 
+			AND FL.DELETED_DATE IS NULL
+			AND BX.OWNER_TYPE = 'U' AND BX.OWNER_ID = #{userCode}
+			AND S.SEQ IS NOT NULL
+	 		AND FDS.SEQ IS NULL
+		)  Folder
+		WHERE 1=1
+		<!-- TODO: 상세 조회 조건 추가 -->
+		<if test="searchText != null and searchText != ''">
+			AND "name" LIKE '%'|| #{searchText} ||'%'
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND "createdDate" BETWEEN #{startDate} AND #{endDate} 
+		</if>
+	</select>
+
+	<select id="selectPublishedList" parameterType="cmap" resultType="cmap">
+		<if test="viewType == 'List'">
+			<include refid="oracle.include.pagingHeader"/>
+		</if>
+		SELECT	  "box_uid"
+				, "uid"
+				, "name"
+				, "bookmark"
+				, "auth"
+				, "fileType"
+				, "createdDate"
+				, "fileSize"
+		FROM (
+			SELECT 	 FD.BOX_UUID AS "box_uid"
+					, FD.UUID AS "uid"
+					, FD.FOLDER_NAME AS "name"
+					, FD.BOOKMARK AS "bookmark"
+					, FD.FOLDER_GRANT AS "auth"
+					, 'folder' AS "fileType"
+					, TO_CHAR(FD.CREATED_DATE,'YYYY-MM-DD HH24:MI:SS') AS "createdDate"
+					, '-' AS "fileSize"
+			FROM WH_BOX_LIST BX
+			INNER JOIN WH_FOLDER_LIST FD ON FD.BOX_UUID = BX.UUID
+			LEFT JOIN WH_SHARED_LIST S ON FD.UUID = S.SHARED_UUID AND S.SHARED_TYPE = 'FOLDER' AND S.SHARED_STATUS = 'ON' AND S.DELETED_DATE IS NULL
+			WHERE BX.DELETED_DATE IS NULL 
+			AND FD.DELETED_DATE IS NULL
+			AND BX.OWNER_TYPE = 'U' AND BX.OWNER_ID = #{userCode}
+			AND S.SEQ IS NOT NULL
+			AND FD.PARENT_UUID = #{folderID}
+			
+			UNION
+			
+			SELECT   FL.BOX_UUID AS "box_uid"
+					, FL.UUID AS "uid"
+					, FL.FILE_NAME AS "name"
+					, FL.BOOKMARK AS "bookmark"
+					, FL.FILE_GRANT AS "auth"
+					, FL.FILE_TYPE AS "fileType"
+					, TO_CHAR(FL.CREATED_DATE,'YYYY-MM-DD HH24:MI:SS') AS "createDate"
+					, TO_CHAR(FL.FILE_SIZE) AS "fileSize"
+			FROM  WH_BOX_LIST BX
+			INNER JOIN WH_FILE_LIST FL ON FL.BOX_UUID = BX.UUID
+			LEFT JOIN WH_SHARED_LIST S ON FL.UUID = S.SHARED_UUID AND S.SHARED_TYPE = 'FILE' AND S.SHARED_STATUS = 'ON' AND S.DELETED_DATE IS NULL
+			WHERE BX.DELETED_DATE IS NULL 
+			AND FL.DELETED_DATE IS NULL
+			AND BX.OWNER_TYPE = 'U' AND BX.OWNER_ID = #{userCode}
+			AND S.SEQ IS NOT NULL
+			AND FL.FOLDER_UUID = #{folderID}
+		) Folder
+		WHERE 1=1
+		<!-- TODO: 상세 조회 조건 추가 -->
+		<if test="searchText != null and searchText != ''">
+			AND "name" LIKE '%'|| #{searchText} ||'%'
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND "name" LIKE '%'|| #{searchText} ||'%'
+		</if>
+		<trim prefix="ORDER BY" prefixOverrides=",">
+			<if test="sortColumn == '' or sortColumn == null or sortDirection == '' or sortDirection == null">
+				(CASE WHEN "fileType" = 'folder' THEN 0 ELSE 1 END) ASC, "createdDate" DESC
+			</if>
+			<if test="sortColumn != null and sortColumn != '' and sortDirection != null and sortDirection !=''">
+			 	<choose>
+					<when test='sortColumn.equalsIgnoreCase("box_uid")'>"box_uid"</when>
+					<when test='sortColumn.equalsIgnoreCase("uid")'>"uid"</when>
+					<when test='sortColumn.equalsIgnoreCase("name")'>"name"</when>
+					<when test='sortColumn.equalsIgnoreCase("bookmark")'>"bookmark"</when>
+					<when test='sortColumn.equalsIgnoreCase("auth")'>"auth"</when>
+					<when test='sortColumn.equalsIgnoreCase("fileType")'>"fileType"</when>
+					<when test='sortColumn.equalsIgnoreCase("fileSize")'>"fileSize"</when>
+					<otherwise>"createDate"</otherwise>
+				</choose>
+				<choose>
+					<when test='sortDirection.equalsIgnoreCase("ASC")'> ASC</when>
+					<otherwise> DESC</otherwise>
+				</choose>
+			</if>
+		</trim>
+		<if test="viewType == 'List'">
+			<include refid="oracle.include.pagingFooter"/>
+		</if>
+	</select>
+	
+	<select id="selectPublishedListCount" parameterType="cmap" resultType="java.lang.Long">
+		SELECT COUNT(*) FROM (
+			SELECT 	FD.UUID AS "uid"
+					, FD.FOLDER_NAME AS "name"
+					, 'folder' AS "fileType"
+					, TO_CHAR(FD.CREATED_DATE,'YYYY-MM-DD HH24:MI:SS') AS "createdDate"
+					, '-' AS "fileSize"
+			FROM WH_BOX_LIST BX
+			INNER JOIN WH_FOLDER_LIST FD ON FD.BOX_UUID = BX.UUID
+			LEFT JOIN WH_SHARED_LIST S ON FD.UUID = S.SHARED_UUID AND S.SHARED_TYPE = 'FOLDER' AND S.SHARED_STATUS = 'ON' AND S.DELETED_DATE IS NULL
+			WHERE BX.DELETED_DATE IS NULL 
+			AND FD.DELETED_DATE IS NULL
+			AND BX.OWNER_TYPE = 'U' AND BX.OWNER_ID = #{userCode}
+			AND S.SEQ IS NOT NULL
+			AND FD.PARENT_UUID = #{folderID}
+			
+			UNION
+			
+			SELECT   FL.UUID AS "uid"
+					, FL.FILE_NAME AS "name"
+					, FL.FILE_TYPE AS "fileType"
+					, TO_CHAR(FL.CREATED_DATE,'YYYY-MM-DD HH24:MI:SS') AS "createDate"
+					, TO_CHAR(FL.FILE_SIZE) AS "fileSize"
+			FROM  WH_BOX_LIST BX
+			INNER JOIN WH_FILE_LIST FL ON FL.BOX_UUID = BX.UUID
+			LEFT JOIN WH_SHARED_LIST S ON FL.UUID = S.SHARED_UUID AND S.SHARED_TYPE = 'FILE' AND S.SHARED_STATUS = 'ON' AND S.DELETED_DATE IS NULL
+			WHERE BX.DELETED_DATE IS NULL 
+			AND FL.DELETED_DATE IS NULL
+			AND BX.OWNER_TYPE = 'U' AND BX.OWNER_ID = #{userCode}
+			AND S.SEQ IS NOT NULL
+			AND FL.FOLDER_UUID = #{folderID}
+		) Folder
+		WHERE 1=1
+		<!-- TODO: 상세 조회 조건 추가 -->
+		<if test="searchText != null and searchText != ''">
+			AND "name" LIKE '%'|| #{searchText} ||'%'
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND "name" LIKE '%'|| #{searchText} ||'%'
+		</if>
+	</select>
+	
+	<select id= "selectTotalFileList" parameterType="cmap" resultType="cmap">
+		/* queryID : webhardUser.box.selectTotalFileList */
+		<include refid="oracle.include.pagingHeader"/>
+		SELECT * 
+		FROM (
+			SELECT 
+				  WFLL.UUID
+				, WFLL.BOX_UUID
+				, WBL.BOX_NAME
+				, WFLL.FOLDER_UUID	
+				, WFDL.FOLDER_NAME_PATH
+				, WFLL.FILE_NAME
+				, WFLL.FILE_TYPE
+				, WFLL.FILE_CONTENT_TYPE
+				, WFLL.FILE_SIZE
+				, WFLL.FILE_GRANT
+				, TO_CHAR(WFLL.CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS "CREATED_DATE"
+				, TO_CHAR(WFLL.CREATED_DATE, 'YYYY-MM-DD') AS "DATE"
+				, WFLL.UPDATED_DATE
+				, WFLL.DELETED_DATE
+				, WFLL.TRASHBIN_FLAG
+				, 'file' AS TYPE
+				, NULL AS SHARED_TYPE
+			FROM WH_FILE_LIST WFLL
+			LEFT JOIN WH_BOX_LIST WBL ON WFLL.BOX_UUID = WBL.UUID
+			LEFT JOIN WH_FOLDER_LIST WFDL ON WFLL.FOLDER_UUID = WFDL.UUID
+			WHERE WFLL.BOX_UUID IN 
+			<foreach collection="boxUUIDArr" item="BOX_UUID" open="(" close=")" separator=",">
+				#{BOX_UUID}
+			</foreach>
+			UNION
+			SELECT 
+				  WFLL.UUID
+				, WFLL.BOX_UUID
+				, NULL AS BOX_NAME
+				, WFLL.FOLDER_UUID	
+				, WFL.FOLDER_NAME_PATH
+				, WFLL.FILE_NAME
+				, WFLL.FILE_TYPE
+				, WFLL.FILE_CONTENT_TYPE
+				, WFLL.FILE_SIZE
+				, WFLL.FILE_GRANT
+				, TO_CHAR(WFLL.CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS "CREATED_DATE"
+				, TO_CHAR(WFLL.CREATED_DATE, 'YYYY-MM-DD') AS "DATE"
+				, WFLL.UPDATED_DATE
+				, WFLL.DELETED_DATE
+				, WFLL.TRASHBIN_FLAG
+				, 'file' AS TYPE
+				, WSL.SHARED_TYPE
+			FROM WH_FILE_LIST WFLL
+			LEFT JOIN WH_SHARED_LIST WSL ON WFLL.UUID = WSL.SHARED_UUID
+			LEFT JOIN WH_FOLDER_LIST WFL ON WFLL.FOLDER_UUID = WFL.UUID
+			<where>
+				<if test="userCode != null and userCode != ''">
+					OR (
+						WSL.SHARED_OWNER_ID = #{userCode}
+						AND WSL.SHARED_GRANT_TYPE = 'UR'
+					)</if>
+				<if test="deptCode != null and deptCode != ''">
+					OR (
+						WSL.SHARED_OWNER_ID = #{deptCode}
+						AND WSL.SHARED_GRANT_TYPE = 'GR'
+					)</if>
+				<if test="subjectInArr != null">
+					OR WSL.SHARED_OWNER_ID IN 
+					<foreach collection="subjectInArr" item="item" open="(" close=")" separator=",">
+					 	#{item} 
+					</foreach>
+				</if>
+			</where>
+		) T
+		WHERE
+		<if test="searchText != null and searchText != ''">
+		FILE_NAME LIKE '%'||#{searchText}||'%' AND
+		</if>
+		<if test="startDate != null and startDate != '' and endDate != null and endDate != ''">
+		CREATED_DATE BETWEEN #{startDate} AND #{endDate} AND
+		</if>
+		DELETED_DATE IS NULL AND 
+		T.UUID NOT IN (
+			SELECT SHARED_UUID FROM WH_SHARED_LIST WHERE DELETED_DATE IS NOT NULL
+		)
+		ORDER BY CREATED_DATE
+		<include refid="oracle.include.pagingFooter"/>
+	</select>
+	
+	<select id="selectTotalFileListCount" parameterType="cmap" resultType="java.lang.Long">
+		/* queryID : webhardUser.box.selectTotalFileListCount */
+		SELECT COUNT(*) 
+		FROM (
+			SELECT 
+				  WFLL.UUID
+				, WFLL.BOX_UUID
+				, WBL.BOX_NAME
+				, WFLL.FOLDER_UUID	
+				, WFDL.FOLDER_NAME_PATH
+				, WFLL.FILE_NAME
+				, WFLL.FILE_TYPE
+				, WFLL.FILE_CONTENT_TYPE
+				, WFLL.FILE_SIZE
+				, WFLL.FILE_GRANT
+				, TO_CHAR(WFLL.CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS "CREATED_DATE"
+				, TO_CHAR(WFLL.CREATED_DATE, 'YYYY-MM-DD') AS "DATE"
+				, WFLL.UPDATED_DATE
+				, WFLL.DELETED_DATE
+				, WFLL.TRASHBIN_FLAG
+				, 'file' AS TYPE
+				, NULL AS SHARED_TYPE
+			FROM WH_FILE_LIST WFLL
+			LEFT JOIN WH_BOX_LIST WBL ON WFLL.BOX_UUID = WBL.UUID
+			LEFT JOIN WH_FOLDER_LIST WFDL ON WFLL.FOLDER_UUID = WFDL.UUID
+			WHERE WFLL.BOX_UUID IN 
+			<foreach collection="boxUUIDArr" item="BOX_UUID" open="(" close=")" separator=",">
+				#{BOX_UUID}
+			</foreach>
+			UNION
+			SELECT 
+				  WFLL.UUID
+				, WFLL.BOX_UUID
+				, NULL AS BOX_NAME
+				, WFLL.FOLDER_UUID	
+				, WFL.FOLDER_NAME_PATH
+				, WFLL.FILE_NAME
+				, WFLL.FILE_TYPE
+				, WFLL.FILE_CONTENT_TYPE
+				, WFLL.FILE_SIZE
+				, WFLL.FILE_GRANT
+				, TO_CHAR(WFLL.CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS "CREATED_DATE"
+				, TO_CHAR(WFLL.CREATED_DATE, 'YYYY-MM-DD') AS "DATE"
+				, WFLL.UPDATED_DATE
+				, WFLL.DELETED_DATE
+				, WFLL.TRASHBIN_FLAG
+				, 'file' AS TYPE
+				, WSL.SHARED_TYPE
+			FROM WH_FILE_LIST WFLL
+			LEFT JOIN WH_SHARED_LIST WSL ON WFLL.UUID = WSL.SHARED_UUID
+			LEFT JOIN WH_FOLDER_LIST WFL ON WFLL.FOLDER_UUID = WFL.UUID
+			<where>
+				<if test="userCode != null and userCode != ''">
+					OR (
+						WSL.SHARED_OWNER_ID = #{userCode}
+						AND WSL.SHARED_GRANT_TYPE = 'UR'
+					)</if>
+				<if test="deptCode != null and deptCode != ''">
+					OR (
+						WSL.SHARED_OWNER_ID = #{deptCode}
+						AND WSL.SHARED_GRANT_TYPE = 'GR'
+					)</if>
+				<if test="subjectInArr != null">
+					OR WSL.SHARED_OWNER_ID IN 
+					<foreach collection="subjectInArr" item="item" open="(" close=")" separator=",">
+					 	#{item} 
+					</foreach>
+				</if>
+			</where>
+		) T
+		WHERE
+		<if test="searchText != null and searchText != ''">
+		FILE_NAME LIKE '%'||#{searchText}||'%' AND
+		</if>
+		<if test="startDate != null and startDate != '' and endDate != null and endDate != ''">
+		CREATED_DATE BETWEEN #{startDate} AND #{endDate} AND
+		</if>
+		DELETED_DATE IS NULL AND 
+		T.UUID NOT IN (
+			SELECT SHARED_UUID FROM WH_SHARED_LIST WHERE DELETED_DATE IS NOT NULL
+		)
+	</select>
+</mapper>

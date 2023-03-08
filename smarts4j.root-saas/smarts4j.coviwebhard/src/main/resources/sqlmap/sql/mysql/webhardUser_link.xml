@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="webhardUser.link">
+    <!-- target 정보로 link 정보 조회  -->
+	<select id="selectLinkData" parameterType="cmap" resultType="cmap">
+		SELECT    LINK
+				, AUTH
+				, IFNULL(PASSWORD, '') AS PASSWORD
+				, IFNULL(STARTDATE, '') AS STARTDATE
+				, IFNULL(ENDDATE, '') AS ENDDATE
+		FROM covi_webhard4j.wh_shared_link 
+		WHERE TARGET_TYPE = #{targetType}
+		AND TARGET_UUID = #{targetUuid}
+	</select>
+	
+	<!-- link로 link 정보 조회  -->
+	<select id="selectLinkInfo" parameterType="cmap" resultType="cmap">
+		SELECT	  A.TARGET_TYPE
+				, A.TARGET_UUID
+				, IFNULL((SELECT BOX_UUID FROM covi_webhard4j.wh_folder_list WHERE UUID = A.TARGET_UUID), (SELECT BOX_UUID FROM covi_webhard4j.wh_file_list WHERE UUID = A.TARGET_UUID)) AS BOX_UUID
+				, A.LINK
+				, A.AUTH
+				, A.PASSWORD
+				, A.STARTDATE
+				, A.ENDDATE
+				, IF((A.ENDDATE IS NULL OR NOW() <![CDATA[ < ]]> DATE_ADD(A.ENDDATE, INTERVAL 1 DAY)) AND (A.STARTDATE IS NULL OR NOW() > A.STARTDATE), 'Y', 'N') AS ISVALID
+		FROM covi_webhard4j.wh_shared_link A
+		WHERE LINK = #{link}
+	</select>
+	
+	<insert id="insertLinkData" parameterType="cmap">
+		INSERT INTO covi_webhard4j.wh_shared_link (TARGET_TYPE, TARGET_UUID, LINK, AUTH, PASSWORD, STARTDATE, ENDDATE, CREATEDATE, MODIFYDATE) 
+		VALUES (#{targetType}, #{targetUuid}, #{link}, #{auth}, #{password}, #{startDate}, #{endDate}, now(3), NULL)
+	</insert>
+	
+	<update id="updateLinkData" parameterType="cmap">
+		UPDATE covi_webhard4j.wh_shared_link 
+		SET	  LINK = #{link}
+			, AUTH = #{auth}
+			, PASSWORD = #{password}
+			, STARTDATE = #{startDate}
+			, ENDDATE = #{endDate}
+			, MODIFYDATE = now(3) 
+		WHERE TARGET_TYPE = #{targetType}
+		AND TARGET_UUID = #{targetUuid}
+	</update>
+	
+	<select id="selectCheckPassworkd" parameterType="cmap" resultType="java.lang.Long">
+		SELECT COUNT(*)
+		FROM covi_webhard4j.wh_shared_link 
+		WHERE Link = #{link}
+		AND PASSWORD = #{password}
+	</select>
+</mapper>

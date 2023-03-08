@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!DOCTYPE tiles-definitions PUBLIC
+       "-//Apache Software Foundation//DTD Tiles Configuration 3.0//EN"
+       "http://tiles.apache.org/dtds/tiles-config_3_0.dtd">
+       
+<tiles-definitions>
+
+  <definition name="login" template="/WEB-INF/views/layout/default.jsp">    
+    <put-attribute name="commonScripts" value="/WEB-INF/views/cmmn/commonjs.jsp"></put-attribute>  
+    <put-attribute name="title" value="covision Portal" />
+    <put-attribute name="content" value="/WEB-INF/views/admin/login/login.jsp" />
+  </definition>
+ 
+  <definition name="*.account" template="/WEB-INF/views/layout/eaccount_default.jsp">
+	<put-attribute name="title"		value="Groupware" />
+	<put-attribute name="include"	value="/layout/include.do" />
+    <put-attribute name="header"	value="/layout/header.do" />
+    <put-attribute name="left"		value="/layout/left.do" />
+    <put-attribute name="content"	value="/layout/home.do" />
+    <put-attribute name="tab"		value="/layout/tab.do" />
+  </definition>
+  
+  <definition name="*/*.user.accountcontent" extends="*.account">
+  	<put-attribute name="tab"		value="/layout/tab.do" />
+    <put-attribute name="content" value="/WEB-INF/views/user/{1}/{2}.jsp" />
+  </definition>
+  
+  <!-- Common Layout Start -->
+  <!-- core -->
+  <definition name="core" template="/WEB-INF/views/layout/core.jsp">
+	<put-attribute name="title" value="Core" />
+	<put-attribute name="include" value="/layout/include.do" />
+    <put-attribute name="header" value="/layout/header.do" />
+    <put-attribute name="left" value="/layout/left.do" />
+    <put-attribute name="content" value="/layout/home.do" />
+    <put-attribute name="footer" value="/layout/footer.do" />
+  </definition>
+  
+  <definition name="*/*.core.content" extends="core">
+    <put-attribute name="content" value="/WEB-INF/views/core/{1}/{2}.jsp" />
+  </definition>
+  
+  <!-- system admin -->
+  <definition name="*.admin" template="/WEB-INF/views/layout/admin_default.jsp">
+	<put-attribute name="title" value="Admin" />
+	<put-attribute name="include" value="/layout/include.do" />
+    <put-attribute name="header" value="/layout/header.do" />
+    <put-attribute name="left" value="/layout/left.do" />
+    <put-attribute name="content" value="/layout/home.do" />
+    <put-attribute name="footer" value="/layout/footer.do" />
+  </definition>
+  
+  <definition name="*/*.admin.content" extends="*.admin">
+    <put-attribute name="content" value="/WEB-INF/views/admin/{1}/{2}.jsp" />
+  </definition>
+  
+   <!-- system manage--> 
+  <definition name="*.manage" template="/WEB-INF/views/layout/user_default.jsp">
+	<put-attribute name="title" value="Groupware" />
+	<put-attribute name="include" value="/layout/include.do" />
+    <put-attribute name="header" value="/layout/header.do" />
+    <put-attribute name="left" value="/layout/left.do" />
+    <put-attribute name="content" value="/layout/home.do" />
+    <put-attribute name="tab" value="/layout/tab.do" />
+  </definition>
+  
+  <definition name="*/*.manage.content" extends="*.manage">
+    <put-attribute name="content" value="/WEB-INF/views/manage/{1}/{2}.jsp" />
+  </definition>
+  
+  <!-- system user -->
+  <definition name="*.user" template="/WEB-INF/views/layout/user_default.jsp">
+	<put-attribute name="title" value="Groupware" />
+	<put-attribute name="include" value="/layout/include.do" />
+    <put-attribute name="header" value="/layout/header.do" />
+    <put-attribute name="left" value="/layout/left.do" />
+    <put-attribute name="content" value="/layout/home.do" />
+    <!-- <put-attribute name="footer" value="/layout/footer.do" /> -->
+    <put-attribute name="tab" value="/layout/tab.do" />
+  </definition>
+  
+  <definition name="*/*.user.content" extends="*.user">
+    <put-attribute name="content" value="/WEB-INF/views/user/{1}/{2}.jsp" />
+  </definition>
+  
+  
+  
+  
+  <definition name="portal" template="/WEB-INF/views/layout/portal.jsp">
+	<put-attribute name="title" value="Groupware" />
+	<put-attribute name="include" value="/portal/getInclude.do"/>
+    <put-attribute name="header" value="/layout/header.do" />
+    <!-- <put-attribute name="left" value="/layout/left.do" /> -->
+    <put-attribute name="content" value="/WEB-INF/views/user/portal/home.jsp" />
+    <!-- <put-attribute name="footer" value="/layout/footer.do" /> -->
+  </definition>
+
+  <definition name="ceo_portal" template="/WEB-INF/views/layout/portal.jsp">
+	<put-attribute name="title" value="Groupware" />
+	<put-attribute name="include" value="/portal/getInclude.do"/>
+    <put-attribute name="header" value="/layout/header.do" />
+    <!-- <put-attribute name="left" value="/layout/left.do" /> -->
+    <put-attribute name="content" value="/WEB-INF/views/user/portal/ceo_portal.jsp" />
+    <!-- <put-attribute name="footer" value="/layout/footer.do" /> -->
+  </definition>
+  
+  <definition name="pn_portal" template="/WEB-INF/views/layout/portal.jsp">
+	<put-attribute name="title" value="Groupware" />
+	<put-attribute name="include" value="/portal/getInclude.do"/>
+    <put-attribute name="header" value="/layout/header.do" />
+    <!-- <put-attribute name="left" value="/layout/left.do" /> -->
+    <put-attribute name="content" value="/WEB-INF/views/user/portal/pn_portal.jsp" />
+    <!-- <put-attribute name="footer" value="/layout/footer.do" /> -->
+  </definition>
+
+  <definition name="mn_portal" template="/WEB-INF/views/user/portal/mn_portal.jsp">
+    <put-attribute name="header" value="/layout/header.do" />
+  </definition>
+
+  <definition name="*/*.page" template="/WEB-INF/views/layout/default.jsp">
+    <put-attribute name="commonScripts" value="/WEB-INF/views/cmmn/commonjs.jsp"></put-attribute>
+    <put-attribute name="title" value="covision Portal" />
+    <put-attribute name="content" value="/WEB-INF/views/bizsystem/{1}/{2}.jsp" />
+  </definition>
+
+  <!-- admin -->
+  <definition name="*/*.admin" template="/WEB-INF/views/layout/admin.jsp">
+    <put-attribute name="commonScripts" value="/WEB-INF/views/cmmn/include_admin.jsp"></put-attribute>
+    <put-attribute name="header" value="/adminheader.do" />
+    <put-attribute name="left" value="/admin{1}left.do" />
+    <put-attribute name="content" value="/WEB-INF/views/admin/{1}/{2}.jsp" />
+    <put-attribute name="footer" value="/WEB-INF/views/cmmn/menu/adminfooter.jsp" />
+  </definition>
+    
+  <definition name="*/*.approval" template="/WEB-INF/views/layout/approval.jsp">
+    <put-attribute name="commonScripts" value="/WEB-INF/views/cmmn/include.jsp"></put-attribute>
+    <put-attribute name="header" value="/header.do" />
+    <put-attribute name="left" value="/{1}left.do" />
+    <put-attribute name="content" value="/WEB-INF/views/user/{2}.jsp" />
+    <put-attribute name="footer" value="/WEB-INF/views/layout/footer.jsp" />
+  </definition>
+  
+  <definition name="*/*.workreport" template="/WEB-INF/views/layout/workreport.jsp">
+    <put-attribute name="header" value="/{1}/{1}header.do" />
+    <put-attribute name="left" value="/{1}/{1}left.do" />
+    <put-attribute name="commonScripts" value="/WEB-INF/views/cmmn/include.jsp"></put-attribute>
+    <put-attribute name="content" value="/WEB-INF/views/user/{1}/{2}.jsp" />
+  </definition>
+  
+  <definition name="*/*.bizcard" template="/WEB-INF/views/layout/bizcard.jsp">
+    <put-attribute name="header" value="/{1}/{1}header.do" />
+    <put-attribute name="left" value="/{1}/{1}left.do" />
+    <put-attribute name="commonScripts" value="/WEB-INF/views/cmmn/include.jsp"></put-attribute>
+    <put-attribute name="content" value="/WEB-INF/views/user/{1}/{2}.jsp" />
+  </definition>
+  
+   <definition name="*oauthException" template="/WEB-INF/views/layout/oauth.jsp">
+    <put-attribute name="commonScripts" value="/WEB-INF/views/cmmn/commonjs.jsp" />
+    <put-attribute name="title" value="covision Portal" />
+    <put-attribute name="content" value="/WEB-INF/views/cmmn/error/oauthException.jsp" />
+  </definition>    
+  
+  <definition name="*webHardException" template="/WEB-INF/views/layout/oauth.jsp">
+    <put-attribute name="commonScripts" value="/WEB-INF/views/cmmn/commonjs.jsp" />
+    <put-attribute name="title" value="covision Portal" />
+    <put-attribute name="content" value="/WEB-INF/views/cmmn/error/webHardException.jsp" />
+  </definition> 
+
+  <definition name="coviException" template="/WEB-INF/views/layout/oauth.jsp">
+    <put-attribute name="commonScripts" value="/WEB-INF/views/cmmn/commonjs.jsp" />
+    <put-attribute name="title" value="covision Portal" />
+    <put-attribute name="content" value="/WEB-INF/views/cmmn/error/coviException.jsp" />
+  </definition> 
+   
+  <definition name="oauth2Login" template="/WEB-INF/views/layout/default.jsp">    
+    <put-attribute name="commonScripts" value="/WEB-INF/views/cmmn/commonjs.jsp" />
+    <put-attribute name="title" value="covision Portal" />
+    <put-attribute name="content" value="/WEB-INF/views/core/login/oauthLogin.jsp" />
+  </definition>
+  
+  <definition name="*oauth2LoginError" template="/WEB-INF/views/layout/oauth.jsp">
+    <put-attribute name="commonScripts" value="/WEB-INF/views/cmmn/commonjs.jsp" />
+    <put-attribute name="title" value="covision Portal" />
+    <put-attribute name="content" value="/WEB-INF/views/core/login/oauthDeny.jsp" />
+  </definition>
+  
+  <definition name="json" template="/WEB-INF/views/cmmn/result/json.jsp">
+  </definition> 
+  
+  <definition name="oauthAuthority" template="/WEB-INF/views/layout/default.jsp">    
+    <put-attribute name="commonScripts" value="/WEB-INF/views/cmmn/commonjs.jsp" />
+    <put-attribute name="title" value="covision Portal" />
+    <put-attribute name="content" value="/WEB-INF/views/core/login/oauthAuthority.jsp" />
+  </definition>  
+  
+  <definition name="*.*.communityMain" template="/WEB-INF/views/layout/community.jsp" >
+    <put-attribute name="header" value="/WEB-INF/views/layout/communityHeader.jsp" />
+    <put-attribute name="subHeader" value="/WEB-INF/views/layout/communitySubHeader.jsp" />
+    <put-attribute name="left" value="/layout/CommunitySiteLeft.do" />
+<!--      <put-attribute name="left" value="/WEB-INF/views/cmmn/menu/CommunitySiteLeft.jsp" />-->
+    <put-attribute name="commonScripts" value="/WEB-INF/views/cmmn/CommunityUserInclude.jsp" />
+    <put-attribute name="content" value="/WEB-INF/views/user/{1}/{2}.jsp" />
+	<!-- <put-attribute name="content" value="/WEB-INF/views/user/community/CommunityMain.jsp" /> -->
+  </definition>
+	
+  <definition name="*.*.communityWebPart" template="/WEB-INF/views/layout/communityWebPart.jsp" >
+    <put-attribute name="header" value="/WEB-INF/views/layout/communityHeader.jsp" />
+    <put-attribute name="subHeader" value="/WEB-INF/views/layout/communitySubHeader.jsp" />
+    <put-attribute name="commonScripts" value="/WEB-INF/views/cmmn/UserInclude.jsp" />
+    <put-attribute name="content" value="/WEB-INF/views/user/{1}/{2}.jsp" />
+  </definition> 
+   
+<!--   
+  <definition name="*.*.communityMain" extends="communityMain">
+   	<put-attribute name="content" value="/WEB-INF/views/user/{1}/{2}.jsp" />
+  </definition>
+-->
+  
+  <!-- Mobile -->
+  <definition name="mobile/*/*.mobile" template="/WEB-INF/views/mobile/layout.jsp">
+    <put-attribute name="include" value="/WEB-INF/views/mobile/MobileInclude.jsp" />
+    <put-attribute name="left" value="/mobile/layout/left.do" />
+    <!-- <put-attribute name="content" value="/WEB-INF/views/mobile/{1}/{2}.jsp" /> -->
+    <put-attribute name="content" value="/mobile/{1}/go{2}.do" />
+  </definition>    
+  
+  <definition name="sso/*" template="/WEB-INF/views/sso/{1}.jsp">
+  </definition>
+  
+  <definition name="sync/*" template="/WEB-INF/views/sync/{1}.jsp">
+  </definition>
+  
+  <definition name="error" template="/WEB-INF/views/cmmn/error/error_400.jsp">
+  </definition>
+  
+  <definition name="passwordCompulsionChange" template="/WEB-INF/views/user/privacy/PasswordCompulsionChange.jsp">    
+  </definition>
+  
+  <!-- Webhard(Admin) -->
+  <definition name="webhard.admin" template="/WEB-INF/views/webhard/common/layout/adminLayout.jsp">
+    <put-attribute name="title" value="Webhard" />
+    <put-attribute name="include" value="/layout/admin/include.do" />
+    <put-attribute name="header" value="/layout/admin/header.do" />
+    <put-attribute name="left" value="/layout/admin/left.do" />
+    <put-attribute name="content" value="/layout/home.do" />
+    <put-attribute name="footer" value="/layout/footer.do" />
+  </definition>
+  
+  <definition name="*/*.webhard.adminContent" extends="webhard.admin">
+	<put-attribute name="content" value="/WEB-INF/views/webhard/{1}/{2}.jsp" />
+  </definition>
+  <!--// Webhard(Admin) -->
+  
+  <!-- Webhard(User) -->
+  <definition name="webhard.user" template="/WEB-INF/views/webhard/common/layout/userLayout.jsp">
+    <put-attribute name="title" value="Webhard" />
+    <put-attribute name="include" value="/layout/user/include.do" />
+    <put-attribute name="header" value="/layout/user/header.do" />
+    <put-attribute name="left" value="/layout/user/left.do" />
+    <put-attribute name="content" value="/layout/home.do" />
+    <put-attribute name="footer" value="/layout/footer.do" />
+  </definition>
+  
+  <definition name="*/*.webhard.userContent" extends="webhard.user">
+  	<put-attribute name="content" value="/WEB-INF/views/webhard/{1}/{2}.jsp" />
+  </definition>
+  <!--// Webhard(User) -->
+  
+  
+  <!-- Biz Management -->
+  <definition name="*/*.bizmnt" template="/WEB-INF/views/layout/user_default.jsp">
+  	<put-attribute name="commonScripts" value="/WEB-INF/views/cmmn/include.jsp"></put-attribute>
+	<put-attribute name="header" value="/header.do" />
+  	<put-attribute name="left" value="/{1}left.do" />
+  	<put-attribute name="content" value="/WEB-INF/views/user/{2}.jsp" />
+  	<put-attribute name="footer" value="/WEB-INF/views/layout/footer.jsp" />
+  </definition>
+  <!-- Biz Management -->
+  
+  <!-- GovDocs(User) -->
+  <definition name="*/*.govdocs" template="/WEB-INF/views/layout/user_default.jsp">
+  	<put-attribute name="commonScripts" value="/WEB-INF/views/cmmn/include.jsp"></put-attribute>
+	<put-attribute name="header" value="/header.do" />
+  	<put-attribute name="left" value="/{1}left.do" />
+  	<put-attribute name="content" value="/WEB-INF/views/user/{2}.jsp" />
+  	<put-attribute name="footer" value="/WEB-INF/views/layout/footer.jsp" />
+  </definition>
+  <!--// GovDocs(User) -->
+  
+</tiles-definitions>

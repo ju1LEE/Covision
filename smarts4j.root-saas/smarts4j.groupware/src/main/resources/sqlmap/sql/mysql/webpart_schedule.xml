@@ -1,0 +1,434 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="webpart.schedule">
+    <!-- 오늘의 일정 -->
+    <select id="todaySchedule" parameterType="cmap" resultType="cmap">
+        SELECT A.* FROM (
+		        # 개인일정만
+		        SELECT
+		        	E.FolderID
+					,E.FolderType
+					,Fn_BaseGetDictionary_S(#{lang}, FD.MultiDisplayName) AS FolderName
+					,E.EventID
+					,E.Subject
+					,E.ImportanceState
+					,E.RegisterCode
+					,Fn_BaseGetDictionary_S(#{lang}, E.MultiRegisterName) AS MultiRegisterName
+					,ED.DateID
+					,ED.StartDateTime
+					,ED.StartDate
+					,ED.StartTime
+					,ED.EndDateTime
+					,ED.EndDate
+					,ED.EndTime
+					,ED.IsRepeat
+					,ED.RepeatID
+		        FROM covi_smart4j.EVENT AS E
+		        LEFT JOIN covi_smart4j.EVENT_DATE AS ED ON E.EventID = ED.EventID
+		        INNER JOIN covi_smart4j.SYS_OBJECT_FOLDER AS FD ON E.FolderID = FD.FolderID AND FD.FolderType = 'Schedule.Person' AND FD.DeleteDate IS NULL
+		        WHERE #{localCurrentDate} BETWEEN STR_TO_DATE(ED.StartDateTime, '%Y-%m-%d') AND STR_TO_DATE(ED.EndDateTime, '%Y-%m-%d')
+		        <if test='aclDataArr != null and aclDataArr.length != 0'>
+					AND E.FolderID IN  
+					<foreach collection="aclDataArr" item="item" open="(" close=")" separator=",">
+						#{item}
+					</foreach>
+				</if>
+		        AND E.DeleteDate IS NULL
+		        AND E.IsDisplay = 'Y'
+		        AND (E.RegisterCode = #{userCode} OR E.OwnerCode = #{userCode} )
+		        
+		        UNION ALL
+		        
+		        # 참석자로 등록된 개인일정
+		        SELECT
+		        	E.FolderID
+					,E.FolderType
+					,Fn_BaseGetDictionary_S(#{lang}, FD.MultiDisplayName) AS FolderName
+					,LE.EventID
+					,E.Subject
+					,E.ImportanceState
+					,E.RegisterCode
+					,Fn_BaseGetDictionary_S(#{lang}, E.MultiRegisterName) AS MultiRegisterName
+					,ED.DateID
+					,ED.StartDateTime
+					,ED.StartDate
+					,ED.StartTime
+					,ED.EndDateTime
+					,ED.EndDate
+					,ED.EndTime
+					,ED.IsRepeat
+					,ED.RepeatID
+		        FROM covi_smart4j.EVENT AS E
+		        LEFT JOIN covi_smart4j.EVENT AS LE ON E.LinkEventID = LE.EventID AND LE.DeleteDate IS NULL
+		        LEFT JOIN covi_smart4j.EVENT_DATE AS ED ON LE.EventID = ED.EventID
+		        INNER JOIN covi_smart4j.SYS_OBJECT_FOLDER AS FD ON E.FolderID = FD.FolderID AND FD.FolderType = 'Schedule.Person' AND FD.DeleteDate IS NULL
+		        WHERE #{localCurrentDate} BETWEEN STR_TO_DATE(ED.StartDateTime, '%Y-%m-%d') AND STR_TO_DATE(ED.EndDateTime, '%Y-%m-%d')
+		        <if test='aclDataArr != null and aclDataArr.length != 0'>
+					AND E.FolderID IN  
+					<foreach collection="aclDataArr" item="item" open="(" close=")" separator=",">
+						#{item}
+					</foreach>
+				</if>
+		        AND E.DeleteDate IS NULL
+		        AND E.IsDisplay = 'Y'
+		        AND E.OwnerCode = #{userCode}
+		        AND E.EventType = 'A'
+		        
+		        UNION ALL
+		        
+		        # 개인일정 제외하고
+		        SELECT
+		        	E.FolderID
+					,E.FolderType
+					,Fn_BaseGetDictionary_S(#{lang}, FD.MultiDisplayName) AS FolderName
+					,E.EventID
+					,E.Subject
+					,E.ImportanceState
+					,E.RegisterCode
+					,Fn_BaseGetDictionary_S(#{lang}, E.MultiRegisterName) AS MultiRegisterName
+					,ED.DateID
+					,ED.StartDateTime
+					,ED.StartDate
+					,ED.StartTime
+					,ED.EndDateTime
+					,ED.EndDate
+					,ED.EndTime
+					,ED.IsRepeat
+					,ED.RepeatID
+		        FROM covi_smart4j.EVENT AS E
+		        LEFT JOIN covi_smart4j.EVENT_DATE AS ED ON E.EventID = ED.EventID
+		        INNER JOIN covi_smart4j.SYS_OBJECT_FOLDER AS FD ON E.FolderID = FD.FolderID AND FD.FolderType <![CDATA[ <> ]]> 'Schedule.Person' AND FD.DeleteDate IS NULL
+		        WHERE #{localCurrentDate} BETWEEN STR_TO_DATE(ED.StartDateTime, '%Y-%m-%d') AND STR_TO_DATE(ED.EndDateTime, '%Y-%m-%d')
+		        <if test='aclDataArr != null and aclDataArr.length != 0'>
+					AND E.FolderID IN  
+					<foreach collection="aclDataArr" item="item" open="(" close=")" separator=",">
+						#{item}
+					</foreach>
+				</if>
+		        AND E.DeleteDate IS NULL
+		        AND E.IsDisplay = 'Y'
+		        AND E.IsPublic = 'Y'
+		        
+		        # 개인일정 공유 이벤트
+		        UNION ALL
+		        
+				SELECT 
+					FD.FolderID
+					,FD.FolderType
+					,Fn_BaseGetDictionary_S(#{lang}, FD.MultiDisplayName) AS FolderName
+					,E.EventID
+					,E.Subject
+					,E.ImportanceState
+					,E.RegisterCode
+					,Fn_BaseGetDictionary_S(#{lang}, E.MultiRegisterName) AS MultiRegisterName
+					,ED.DateID
+					,ED.StartDateTime
+					,ED.StartDate
+					,ED.StartTime
+					,ED.EndDateTime
+					,ED.EndDate
+					,ED.EndTime
+					,ED.IsRepeat
+					,ED.RepeatID
+				FROM covi_smart4j.EVENT AS E
+				INNER JOIN	covi_smart4j.SYS_OBJECT_FOLDER AS FD	ON FD.FolderType = 'Schedule.Share'
+				INNER JOIN	covi_smart4j.EVENT_SHARE AS ES ON ES.SpecifierCode = E.OwnerCode AND ES.TargetCode = #{userCode}
+				INNER JOIN	covi_smart4j.EVENT_DATE AS ED				ON E.EventID = ED.EventID
+				WHERE E.FolderType = 'Schedule.Person'
+				AND #{localCurrentDate} BETWEEN STR_TO_DATE(ED.StartDateTime, '%Y-%m-%d') AND STR_TO_DATE(ED.EndDateTime, '%Y-%m-%d')
+				AND CURDATE() BETWEEN ES.StartDate AND ES.EndDate
+				AND E.DeleteDate IS NULL
+		        AND E.IsDisplay = 'Y'
+			) AS A
+			WHERE FolderType LIKE '%Schedule%'
+			ORDER BY A.StartDateTime, A.EndDateTime;
+    </select>
+    
+    <!-- 어제의 일정 -->
+    <select id="yesterdaySchedule" parameterType="cmap" resultType="cmap">
+        SELECT A.* FROM (
+		        # 개인일정만
+		        SELECT
+		        	E.FolderID
+					,E.FolderType
+					,Fn_BaseGetDictionary_S(#{lang}, FD.MultiDisplayName) AS FolderName
+					,E.EventID
+					,E.Subject
+					,E.ImportanceState
+					,E.RegisterCode
+					,Fn_BaseGetDictionary_S(#{lang}, E.MultiRegisterName) AS MultiRegisterName
+					,ED.DateID
+					,ED.StartDateTime
+					,ED.StartDate
+					,ED.StartTime
+					,ED.EndDateTime
+					,ED.EndDate
+					,ED.EndTime
+					,ED.IsRepeat
+					,ED.RepeatID
+		        FROM covi_smart4j.EVENT AS E
+		        LEFT JOIN covi_smart4j.EVENT_DATE AS ED ON E.EventID = ED.EventID
+		        INNER JOIN covi_smart4j.SYS_OBJECT_FOLDER AS FD ON E.FolderID = FD.FolderID AND FD.FolderType = 'Schedule.Person' AND FD.DeleteDate IS NULL
+		        WHERE DATE_ADD(#{localCurrentDate}, INTERVAL -1 DAY) BETWEEN STR_TO_DATE(ED.StartDateTime, '%Y-%m-%d') AND STR_TO_DATE(ED.EndDateTime, '%Y-%m-%d')
+		        <if test='aclDataArr != null and aclDataArr.length != 0'>
+					AND E.FolderID IN  
+					<foreach collection="aclDataArr" item="item" open="(" close=")" separator=",">
+						#{item}
+					</foreach>
+				</if>
+		        AND E.DeleteDate IS NULL
+		        AND E.IsDisplay = 'Y'
+		        AND (E.RegisterCode = #{userCode} OR E.OwnerCode = #{userCode} )
+		        
+		        UNION ALL
+		        
+		        # 참석자로 등록된 개인일정
+		        SELECT
+		        	E.FolderID
+					,E.FolderType
+					,Fn_BaseGetDictionary_S(#{lang}, FD.MultiDisplayName) AS FolderName
+					,LE.EventID
+					,E.Subject
+					,E.ImportanceState
+					,E.RegisterCode
+					,Fn_BaseGetDictionary_S(#{lang}, E.MultiRegisterName) AS MultiRegisterName
+					,ED.DateID
+					,ED.StartDateTime
+					,ED.StartDate
+					,ED.StartTime
+					,ED.EndDateTime
+					,ED.EndDate
+					,ED.EndTime
+					,ED.IsRepeat
+					,ED.RepeatID
+		        FROM covi_smart4j.EVENT AS E
+		        LEFT JOIN covi_smart4j.EVENT AS LE ON E.LinkEventID = LE.EventID AND LE.DeleteDate IS NULL
+		        LEFT JOIN covi_smart4j.EVENT_DATE AS ED ON LE.EventID = ED.EventID
+		        INNER JOIN covi_smart4j.SYS_OBJECT_FOLDER AS FD ON E.FolderID = FD.FolderID AND FD.FolderType = 'Schedule.Person' AND FD.DeleteDate IS NULL
+		        WHERE DATE_ADD(#{localCurrentDate}, INTERVAL -1 DAY) BETWEEN STR_TO_DATE(ED.StartDateTime, '%Y-%m-%d') AND STR_TO_DATE(ED.EndDateTime, '%Y-%m-%d')
+		        <if test='aclDataArr != null and aclDataArr.length != 0'>
+					AND E.FolderID IN  
+					<foreach collection="aclDataArr" item="item" open="(" close=")" separator=",">
+						#{item}
+					</foreach>
+				</if>
+		        AND E.DeleteDate IS NULL
+		        AND E.IsDisplay = 'Y'
+		        AND E.OwnerCode = #{userCode}
+		        AND E.EventType = 'A'
+		        
+		        UNION ALL
+		        
+		        # 개인일정 제외하고
+		        SELECT
+		        	E.FolderID
+					,E.FolderType
+					,Fn_BaseGetDictionary_S(#{lang}, FD.MultiDisplayName) AS FolderName
+					,E.EventID
+					,E.Subject
+					,E.ImportanceState
+					,E.RegisterCode
+					,Fn_BaseGetDictionary_S(#{lang}, E.MultiRegisterName) AS MultiRegisterName
+					,ED.DateID
+					,ED.StartDateTime
+					,ED.StartDate
+					,ED.StartTime
+					,ED.EndDateTime
+					,ED.EndDate
+					,ED.EndTime
+					,ED.IsRepeat
+					,ED.RepeatID
+		        FROM covi_smart4j.EVENT AS E
+		        LEFT JOIN covi_smart4j.EVENT_DATE AS ED ON E.EventID = ED.EventID
+		        INNER JOIN covi_smart4j.SYS_OBJECT_FOLDER AS FD ON E.FolderID = FD.FolderID AND FD.FolderType <![CDATA[ <> ]]> 'Schedule.Person' AND FD.DeleteDate IS NULL
+		        WHERE DATE_ADD(#{localCurrentDate}, INTERVAL -1 DAY) BETWEEN STR_TO_DATE(ED.StartDateTime, '%Y-%m-%d') AND STR_TO_DATE(ED.EndDateTime, '%Y-%m-%d')
+		        <if test='aclDataArr != null and aclDataArr.length != 0'>
+					AND E.FolderID IN  
+					<foreach collection="aclDataArr" item="item" open="(" close=")" separator=",">
+						#{item}
+					</foreach>
+				</if>
+		        AND E.DeleteDate IS NULL
+		        AND E.IsDisplay = 'Y'
+		        AND E.IsPublic = 'Y'
+		        
+		        # 개인일정 공유 이벤트
+		        UNION ALL
+		        
+				SELECT 
+					FD.FolderID
+					,FD.FolderType
+					,Fn_BaseGetDictionary_S(#{lang}, FD.MultiDisplayName) AS FolderName
+					,E.EventID
+					,E.Subject
+					,E.ImportanceState
+					,E.RegisterCode
+					,Fn_BaseGetDictionary_S(#{lang}, E.MultiRegisterName) AS MultiRegisterName
+					,ED.DateID
+					,ED.StartDateTime
+					,ED.StartDate
+					,ED.StartTime
+					,ED.EndDateTime
+					,ED.EndDate
+					,ED.EndTime
+					,ED.IsRepeat
+					,ED.RepeatID
+				FROM covi_smart4j.EVENT AS E
+				INNER JOIN	covi_smart4j.SYS_OBJECT_FOLDER AS FD	ON FD.FolderType = 'Schedule.Share'
+				INNER JOIN	covi_smart4j.EVENT_SHARE AS ES ON ES.SpecifierCode = E.OwnerCode AND ES.TargetCode = #{userCode}
+				INNER JOIN	covi_smart4j.EVENT_DATE AS ED				ON E.EventID = ED.EventID
+				WHERE E.FolderType = 'Schedule.Person'
+				AND DATE_ADD(#{localCurrentDate}, INTERVAL -1 DAY) BETWEEN STR_TO_DATE(ED.StartDateTime, '%Y-%m-%d') AND STR_TO_DATE(ED.EndDateTime, '%Y-%m-%d')
+				AND CURDATE() BETWEEN ES.StartDate AND ES.EndDate
+				AND E.DeleteDate IS NULL
+		        AND E.IsDisplay = 'Y'
+			) AS A
+			WHERE FolderType LIKE '%Schedule%'
+			ORDER BY A.StartDateTime, A.EndDateTime;
+    </select>
+    
+    <!-- 내일의 일정 -->
+    <select id="tomorrowSchedule" parameterType="cmap" resultType="cmap">
+        SELECT A.* FROM (
+		        # 개인일정만
+		        SELECT
+		        	E.FolderID
+					,E.FolderType
+					,Fn_BaseGetDictionary_S(#{lang}, FD.MultiDisplayName) AS FolderName
+					,E.EventID
+					,E.Subject
+					,E.ImportanceState
+					,E.RegisterCode
+					,Fn_BaseGetDictionary_S(#{lang}, E.MultiRegisterName) AS MultiRegisterName
+					,ED.DateID
+					,ED.StartDateTime
+					,ED.StartDate
+					,ED.StartTime
+					,ED.EndDateTime
+					,ED.EndDate
+					,ED.EndTime
+					,ED.IsRepeat
+					,ED.RepeatID
+		        FROM covi_smart4j.EVENT AS E
+		        LEFT JOIN covi_smart4j.EVENT_DATE AS ED ON E.EventID = ED.EventID
+		        INNER JOIN covi_smart4j.SYS_OBJECT_FOLDER AS FD ON E.FolderID = FD.FolderID AND FD.FolderType = 'Schedule.Person' AND FD.DeleteDate IS NULL
+		        WHERE DATE_ADD(#{localCurrentDate}, INTERVAL 1 DAY) BETWEEN STR_TO_DATE(ED.StartDateTime, '%Y-%m-%d') AND STR_TO_DATE(ED.EndDateTime, '%Y-%m-%d')
+		        <if test='aclDataArr != null and aclDataArr.length != 0'>
+					AND E.FolderID IN  
+					<foreach collection="aclDataArr" item="item" open="(" close=")" separator=",">
+						#{item}
+					</foreach>
+				</if>
+		        AND E.DeleteDate IS NULL
+		        AND E.IsDisplay = 'Y'
+		        AND (E.RegisterCode = #{userCode} OR E.OwnerCode = #{userCode} )
+		        
+		        UNION ALL
+		        
+		        # 참석자로 등록된 개인일정
+		        SELECT
+		        	E.FolderID
+					,E.FolderType
+					,Fn_BaseGetDictionary_S(#{lang}, FD.MultiDisplayName) AS FolderName
+					,LE.EventID
+					,E.Subject
+					,E.ImportanceState
+					,E.RegisterCode
+					,Fn_BaseGetDictionary_S(#{lang}, E.MultiRegisterName) AS MultiRegisterName
+					,ED.DateID
+					,ED.StartDateTime
+					,ED.StartDate
+					,ED.StartTime
+					,ED.EndDateTime
+					,ED.EndDate
+					,ED.EndTime
+					,ED.IsRepeat
+					,ED.RepeatID
+		        FROM covi_smart4j.EVENT AS E
+		        LEFT JOIN covi_smart4j.EVENT AS LE ON E.LinkEventID = LE.EventID AND LE.DeleteDate IS NULL
+		        LEFT JOIN covi_smart4j.EVENT_DATE AS ED ON LE.EventID = ED.EventID
+		        INNER JOIN covi_smart4j.SYS_OBJECT_FOLDER AS FD ON E.FolderID = FD.FolderID AND FD.FolderType = 'Schedule.Person' AND FD.DeleteDate IS NULL
+		        WHERE DATE_ADD(#{localCurrentDate}, INTERVAL 1 DAY) BETWEEN STR_TO_DATE(ED.StartDateTime, '%Y-%m-%d') AND STR_TO_DATE(ED.EndDateTime, '%Y-%m-%d')
+		        <if test='aclDataArr != null and aclDataArr.length != 0'>
+					AND E.FolderID IN  
+					<foreach collection="aclDataArr" item="item" open="(" close=")" separator=",">
+						#{item}
+					</foreach>
+				</if>
+		        AND E.DeleteDate IS NULL
+		        AND E.IsDisplay = 'Y'
+		        AND E.OwnerCode = #{userCode}
+		        AND E.EventType = 'A'
+		        
+		        UNION ALL
+		        
+		        # 개인일정 제외하고
+		        SELECT
+		        	E.FolderID
+					,E.FolderType
+					,Fn_BaseGetDictionary_S(#{lang}, FD.MultiDisplayName) AS FolderName
+					,E.EventID
+					,E.Subject
+					,E.ImportanceState
+					,E.RegisterCode
+					,Fn_BaseGetDictionary_S(#{lang}, E.MultiRegisterName) AS MultiRegisterName
+					,ED.DateID
+					,ED.StartDateTime
+					,ED.StartDate
+					,ED.StartTime
+					,ED.EndDateTime
+					,ED.EndDate
+					,ED.EndTime
+					,ED.IsRepeat
+					,ED.RepeatID
+		        FROM covi_smart4j.EVENT AS E
+		        LEFT JOIN covi_smart4j.EVENT_DATE AS ED ON E.EventID = ED.EventID
+		        INNER JOIN covi_smart4j.SYS_OBJECT_FOLDER AS FD ON E.FolderID = FD.FolderID AND FD.FolderType <![CDATA[ <> ]]> 'Schedule.Person' AND FD.DeleteDate IS NULL
+		        WHERE DATE_ADD(#{localCurrentDate}, INTERVAL 1 DAY) BETWEEN STR_TO_DATE(ED.StartDateTime, '%Y-%m-%d') AND STR_TO_DATE(ED.EndDateTime, '%Y-%m-%d')
+		        <if test='aclDataArr != null and aclDataArr.length != 0'>
+					AND E.FolderID IN  
+					<foreach collection="aclDataArr" item="item" open="(" close=")" separator=",">
+						#{item}
+					</foreach>
+				</if>
+		        AND E.DeleteDate IS NULL
+		        AND E.IsDisplay = 'Y'
+		        AND E.IsPublic = 'Y'
+		        
+		        # 개인일정 공유 이벤트
+		        UNION ALL
+		        
+				SELECT 
+					FD.FolderID
+					,FD.FolderType
+					,Fn_BaseGetDictionary_S(#{lang}, FD.MultiDisplayName) AS FolderName
+					,E.EventID
+					,E.Subject
+					,E.ImportanceState
+					,E.RegisterCode
+					,Fn_BaseGetDictionary_S(#{lang}, E.MultiRegisterName) AS MultiRegisterName
+					,ED.DateID
+					,ED.StartDateTime
+					,ED.StartDate
+					,ED.StartTime
+					,ED.EndDateTime
+					,ED.EndDate
+					,ED.EndTime
+					,ED.IsRepeat
+					,ED.RepeatID
+				FROM covi_smart4j.EVENT AS E
+				INNER JOIN	covi_smart4j.SYS_OBJECT_FOLDER AS FD	ON FD.FolderType = 'Schedule.Share'
+				INNER JOIN	covi_smart4j.EVENT_SHARE AS ES ON ES.SpecifierCode = E.OwnerCode AND ES.TargetCode = #{userCode}
+				INNER JOIN	covi_smart4j.EVENT_DATE AS ED				ON E.EventID = ED.EventID
+				WHERE E.FolderType = 'Schedule.Person'
+				AND DATE_ADD(#{localCurrentDate}, INTERVAL 1 DAY) BETWEEN STR_TO_DATE(ED.StartDateTime, '%Y-%m-%d') AND STR_TO_DATE(ED.EndDateTime, '%Y-%m-%d')
+				AND CURDATE() BETWEEN ES.StartDate AND ES.EndDate
+				AND E.DeleteDate IS NULL
+		        AND E.IsDisplay = 'Y'
+			) AS A
+			WHERE FolderType LIKE '%Schedule%'
+			ORDER BY A.StartDateTime, A.EndDateTime;
+    </select>
+</mapper>
+

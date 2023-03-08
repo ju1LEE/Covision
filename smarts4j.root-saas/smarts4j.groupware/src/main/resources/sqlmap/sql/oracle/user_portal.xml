@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="user.portal">
+    <select id="selectPortalTheme" parameterType="cmap" resultType="java.lang.String">
+    	SELECT NVL(ThemeCode, 'default') AS "Theme" FROM PORTAL WHERE PortalID = #{portalID}
+    </select>
+    
+    <select id="selectPortalTag" parameterType="cmap" resultType="java.lang.String">
+        SELECT PortalTag AS "PortalTag"
+        FROM PORTAL 
+        WHERE PortalID = #{portalID}
+    </select>
+    
+    <select id="selectPortalWebpart" parameterType="cmap" resultType="cmap">
+        SELECT b.WebpartID AS "WebpartID"
+			, a.LayoutDivNumber AS "LayoutDivNumber"
+			, a.WebpartOrder AS "WebpartOrder"
+			, b.DisplayName AS "DisplayName"
+			, b.HtmlFilePath AS "HtmlFilePath"
+			, b.JsFilePath AS "JsFilePath"
+			, b.JsModuleName AS "JsModuleName"
+			, b.Preview AS "Preview"
+			, b.Resource_ AS "Resource"
+			, b.ScriptMethod AS "ScriptMethod"
+			, b.MinHeight AS "MinHeight"
+			, b.DataJSON AS "DataJSON"
+			, b.ExtentionJSON AS "ExtentionJSON"  
+		FROM PORTAL_LAYOUT_WEBPART a
+		INNER JOIN PORTAL_WEBPART b ON a.WebpartID = b.WebpartID
+		WHERE a.PortalID = #{portalID} 
+		AND b.IsUse = 'Y'
+		ORDER BY a.LayoutDivNumber ASC, a.LayoutDivSort ASC
+    </select>
+    
+    <select id="selectLayoutInfo" parameterType = "cmap" resultType = "cmap">
+        SELECT a.URL
+             , b.IsDefault AS "IsDefault"
+             , b.LayoutType AS "LayoutType"
+			 , a.PortalType AS "PortalType"
+		FROM PORTAL a
+		LEFT JOIN PORTAL_LAYOUT b ON a.LayoutID = b.LayoutID
+		WHERE a.PortalID = #{portalID}
+    </select>
+    
+    <select id="selectDefaultInitPortalID" parameterType="cmap" resultType="java.lang.String" >
+	    SELECT NVL(	
+	    	(SELECT PortalID FROM (
+		    	(SELECT PortalID FROM PORTAL 
+				WHERE BizSection = 'Portal' 
+				AND IsUse = 'Y'
+		    AND PortalID IN
+				<foreach item="item" index="index" collection="aclPortalArr" open="(" close=")" separator=",">
+	           		 #{item}
+	       		</foreach>
+				ORDER BY SortKey ASC 
+				)
+			)A WHERE ROWNUM = 1 ), 0 )InitPortalID FROM dual 
+	</select>
+    
+	<select id="selectMyPortalList" parameterType="cmap" resultType="cmap">
+		SELECT	  PortalID AS "PortalID"
+				, CASE WHEN MultiDisplayName IS NULL THEN DisplayName
+					   ELSE Fn_BaseGetDictionary_S(#{lang}, MultiDisplayName)
+				  END AS "DisplayName"
+		FROM PORTAL
+		WHERE BizSection = 'Portal' AND IsUse = 'Y'
+		AND PortalID IN
+		<foreach item="item" index="index" collection="aclPortalArr" open="(" close=")" separator=",">
+			#{item}
+		</foreach>
+		ORDER BY SortKey ASC 
+	</select>
+	
+	<update id="updateUserInitPortal" parameterType="cmap">
+	    	UPDATE SYS_OBJECT_USER 
+			SET InitPortal = #{initPortalID}
+			WHERE UserCode = #{userCode}
+	</update>
+	
+	<select id="selectMyContentsWebpartList" parameterType="cmap" resultType="cmap">
+			SELECT  WebpartID AS "WebpartID"
+						,  Fn_BaseGetDictionary_S(#{lang},  MultiDisplayName) AS "DisplayName"
+						,  BizSection as "BizSection" 
+			FROM PORTAL_WEBPART
+			WHERE Range = #{cMode}
+			AND IsUse = 'Y'
+	</select>
+		
+	<delete id="deleteMyContentsSetting" parameterType="cmap" >
+	    DELETE FROM MYCONTENTS_WEBPART
+	    WHERE UserCode = #{userCode}
+	    AND ContentsMode = #{cMode}
+	</delete>
+	
+	<insert id="insertMyContentsSetting" parameterType="cmap" >
+		<foreach item="item" index="index" collection="webpartArr" separator=" " open="INSERT ALL" close="SELECT * FROM DUAL">
+		    INTO MYCONTENTS_WEBPART(UserCode, WebpartID, SortKey, ContentsMode)
+			VALUES(#{userCode}, #{item}, #{index}, #{cMode})
+		</foreach>
+	</insert>
+	
+	<select id="selectMyContentsCnt"  parameterType="cmap" resultType="java.lang.Long">
+	    SELECT COUNT(*)
+		FROM MYCONTENTS
+		WHERE UserCode = #{userCode}
+		AND ContentsMode = #{cMode}
+	</select>
+	
+	<insert id="insertMyContents"  parameterType="cmap" >
+	   INSERT INTO MYCONTENTS(USERCODE,WEBPARTCNT,ContentsMode,REGISTDATE,MODIFYDATE)
+	   VALUES (#{userCode}
+        , (SELECT COUNT(*) FROM MYCONTENTS_WEBPART WHERE UserCode = #{userCode} AND ContentsMode = #{cMode})
+        , #{cMode}
+        , SYSDATE
+        , SYSDATE)
+	</insert> 
+	
+	<update id="updateMyContents" parameterType="cmap">
+	    UPDATE MYCONTENTS
+		SET WEBPARTCNT =  (SELECT COUNT(*) FROM MYCONTENTS_WEBPART WHERE UserCode = #{userCode} AND ContentsMode = #{cMode})
+			, MODIFYDATE = SYSDATE
+		WHERE USERCODE = #{userCode}
+		AND ContentsMode = #{cMode}
+	</update>
+	
+	<select id="selectMyContentAllWebpartList" parameterType="cmap" resultType="cmap">
+	    SELECT P.WEBPARTID AS "WebpartID"
+				, P.HTMLFILEPATH AS "HtmlFilePath"
+				, P.JSFILEPATH AS "JsFilePath"
+				, P.SCRIPTMETHOD AS "ScriptMethod"
+				, P.EXTENTIONJSON AS "ExtentionJSON"
+				, P.BizSection as "BizSection"
+		FROM PORTAL_WEBPART P 
+		WHERE P.RANGE = #{cMode}
+		AND P.ISUSE = 'Y'
+		ORDER BY RegistDate
+	</select>
+	
+	<select id="selectMyContentSetWebpartList" parameterType="cmap" resultType="cmap">
+	    SELECT M.WEBPARTID AS "WebpartID"
+				, P.HTMLFILEPATH AS "HtmlFilePath"
+				, P.JSFILEPATH AS "JsFilePath"
+				, P.SCRIPTMETHOD AS "ScriptMethod"
+				, P.EXTENTIONJSON AS "ExtentionJSON"
+				, P.BizSection as "BizSection"
+				, P.Preview as "Preview"
+		FROM MYCONTENTS_WEBPART M
+		INNER JOIN PORTAL_WEBPART P ON M.WEBPARTID = P.WEBPARTID AND P.RANGE = #{cMode}
+		WHERE P.ISUSE = 'Y'
+		AND M.USERCODE = #{userCode}
+		ORDER BY M.SORTKEY 
+	</select>
+	
+	<select id="selectMyContentWebpartList" parameterType="cmap" resultType="cmap">
+	    SELECT	  WebpartID AS "WebpartID"
+				, HtmlFilePath AS "HtmlFilePath"
+				, JsFilePath AS "JsFilePath"
+				, ScriptMethod AS "ScriptMethod"
+				, ExtentionJSON AS "ExtentionJSON"
+				, Preview as "Preview"
+		FROM PORTAL_WEBPART
+		WHERE IsUse = 'Y'
+		AND WebpartID = #{webpartID}
+	</select>
+	
+</mapper>

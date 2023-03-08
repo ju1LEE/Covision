@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="webhardCommon.common">
+
+	<!-- 폴더 및 파일 공유 -->
+	<insert id="insertSharedList" parameterType="cmap">
+		/* webhardCommon.common.insertSharedList */
+		INSERT INTO WH_SHARED_LIST (
+			SEQ
+			, SHARED_TYPE
+			, SHARED_UUID
+			, SHARED_OWNER_ID
+			, SHARED_GRANT_TYPE
+			, SHARED_STATUS
+			, CREATED_DATE
+		) VALUES (
+			SEQ_WH_SHARED_LIST.NEXTVAL
+			, #{sharedType}
+			, #{sharedUuid}
+			, #{sharedOwnerId}
+			, #{sharedGrantType}
+			, #{sharedStatus}
+			, SYSDATE
+		)
+	</insert>
+	
+	<!-- 폴더 및 파일 공유 해제 -->
+	<update id="deleteSharedList" parameterType="cmap">
+		/* webhardCommon.common.deleteSharedList */
+		UPDATE WH_SHARED_LIST 
+		SET
+			DELETED_DATE = SYSDATE
+		WHERE SHARED_UUID = #{sharedUuid}
+		AND SHARED_OWNER_ID = #{sharedOwnerId}
+	</update>
+	
+	<!-- 상위 폴더의 공유 정보 유지  -->
+	<insert id="insertParentSharedList" parameterType="cmap">
+		/* webhardCommon.common.insertParentSharedList */
+		INSERT INTO WH_SHARED_LIST (SEQ, SHARED_TYPE, SHARED_UUID, SHARED_OWNER_ID, SHARED_GRANT_TYPE, SHARED_STATUS, CREATED_DATE) 
+		SELECT  SEQ_WH_SHARED_LIST.NEXTVAL
+				, #{sharedType} AS SHARED_TYPE
+				, #{sharedUuid} AS SHARED_UUID
+				, SHARED_OWNER_ID
+				, SHARED_GRANT_TYPE
+				, SHARED_STATUS
+				, SYSDATE AS CREATED_DATE
+		FROM wh_shared_list
+		WHERE SHARED_TYPE = 'FOLDER'
+		AND SHARED_UUID = #{parentUuid}
+		AND DELETED_DATE IS NULL
+	</insert>
+	
+	<!-- 파일 및 폴더 공유 시, 공유자에게 알림 메세지 전달  -->
+	<insert id="sendMessagingShared" parameterType="cmap" >
+	<![CDATA[ 
+	INSERT INTO sys_alarm_list(				
+		USERCODE, CATEGORY, MSGTYPE, TITLE, 
+		URL, 
+		MESSAGE, OPENTYPE, ISPUSH, PUSHERCODE, RECEIVEDDATE, ISREAD
+	)
+	VALUES(
+		#{sharedOwnerId}, 'Webhard', 'sharedNotification', ' ', 
+		'/webhard/layout/user_SharedBoxList.do?CLSYS=webhard&CLMD=user&CLBIZ=Webhard&folderType=Shared', 
+		' ', 'PAGEMOVE', 'Y', #{PusherCode}, SYSDATE, 'N'
+	)
+	]]> 
+	</insert>
+</mapper>

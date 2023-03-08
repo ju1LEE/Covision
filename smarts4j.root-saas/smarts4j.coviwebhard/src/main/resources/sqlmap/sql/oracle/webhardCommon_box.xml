@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="webhardCommon.box">
+
+	<resultMap id="boxInfoMap" type="cmap">
+		<result property="seq" column="SEQ" />
+		<result property="boxUuid" column="UUID" />
+		<result property="domainId" column="DOMAIN_ID" />
+		<result property="domainCode" column="DOMAIN_CODE" />
+		<result property="ownerType" column="OWNER_TYPE" />
+		<result property="ownerId" column="OWNER_ID" />
+		<result property="ownerName" column="OWNER_NAME" />
+		<result property="boxName" column="BOX_NAME" />
+		<result property="boxMaxSize" column="BOX_MAX_SIZE" />
+		<result property="boxCurrentSize" column="BOX_CURRENT_SIZE" />
+		<result property="useYn" column="USE_YN" />
+		<result property="blockYn" column="BLOCK_YN" />
+		<result property="blockReason" column="BLOCK_REASON" />
+		<result property="boxPath" column="BOX_PATH" />
+		<result property="createdDate" column="CREATED_DATE" />
+		<result property="updatedDate" column="UPDATED_DATE" />
+		<result property="deletedDate" column="DELETED_DATE" />
+	</resultMap>
+
+	<!-- Box 정보 조회 -->
+	<select id="selectBox" parameterType="cmap" resultMap="boxInfoMap">
+		/* webhardCommon.box.selectBox */
+		SELECT	  SEQ
+				, UUID
+				, DOMAIN_ID
+				, DOMAIN_CODE
+				, OWNER_TYPE
+				, OWNER_ID
+				, OWNER_NAME
+				, BOX_NAME
+				, BOX_PATH
+				, BOX_MAX_SIZE
+				, BOX_CURRENT_SIZE
+				, USE_YN
+				, BLOCK_YN
+				, BLOCK_REASON
+				, CREATED_DATE
+				, UPDATED_DATE
+				, DELETED_DATE
+		FROM WH_BOX_LIST
+		WHERE 1=1
+		<choose>
+			<when test="boxUuid != null and boxUuid != ''">
+				AND UUID = #{boxUuid}
+			</when>
+			<otherwise>
+				<if test="domainId != null and domainId != ''">
+					AND DOMAIN_ID = #{domainId}
+				</if>
+				<if test="ownerType != null and ownerType != ''">
+					AND OWNER_TYPE = #{ownerType}
+				</if>
+				<if test="ownerId != null and ownerId != ''">
+					AND OWNER_ID = #{ownerId}
+				</if>
+			</otherwise>
+		</choose>
+	</select>
+	
+	<!-- BOX 수정  -->
+	<update id="updateBox" parameterType="cmap">
+		/* webhardCommon.box.updateBox */
+		UPDATE WH_BOX_LIST 
+		SET
+			BOX_CURRENT_SIZE = BOX_CURRENT_SIZE + TO_NUMBER(#{fileSize})
+			<if test="useYn != null and useYn != ''">
+				, USE_YN = #{useYn}
+			</if>
+			<if test="blockYn != null and blockYn != ''">
+				, BLOCK_YN = #{blockYn}
+				, BLOCK_REASON = #{blockReason}
+			</if>
+			, UPDATED_DATE = SYSDATE
+			<if test="isDeleted == 'Y'">
+				, DELETED_DATE = SYSDATE
+			</if>
+		WHERE UUID = #{boxUuid}
+	</update>
+
+	<!-- BOX 삭제 -->
+	<update id="deleteBox" parameterType="cmap">
+		/* webhardCommon.box.deleteBox */
+		UPDATE WH_BOX_LIST 
+		SET	  BOX_CURRENT_SIZE = 0
+			, USE_YN = 'N'
+			, BLOCK_YN = 'Y'
+			, BLOCK_REASON = 'Deleted'
+			, DELETED_DATE = SYSDATE
+		WHERE UUID = #{boxUuid}
+	</update>
+	
+	<!-- 겸직 사용자 웹하드 박스 생성시 Origin 도메인 가져오기 -->
+	<select id="selectOriginDomain" parameterType="cmap" resultType="cmap">
+		SELECT	  SOD.DomainCode AS "DomainCode"
+				, SOD.DomainID AS "DomainID"
+		FROM sys_object_user_basegroup SOUB
+		LEFT OUTER JOIN sys_object_domain SOD ON SOD.DomainCode = SOUB.CompanyCode
+		WHERE SOUB.UserCode = #{userCode}
+		AND SOUB.JobType = 'Origin'
+	</select>
+	
+	<!-- BOX 신규 생성 -->
+	<insert id="insertBox" parameterType="cmap">		
+		INSERT INTO WH_BOX_LIST (
+			  SEQ
+			, UUID
+			, DOMAIN_ID
+			, DOMAIN_CODE
+			, OWNER_TYPE
+			, OWNER_ID
+			, OWNER_NAME
+			, BOX_NAME
+			, BOX_MAX_SIZE
+			, BOX_CURRENT_SIZE
+			, USE_YN
+			, BLOCK_YN
+			, BLOCK_REASON
+			, BOX_PATH
+			, CREATED_DATE
+		) VALUES (
+			  SEQ_WH_BOX_LIST.NEXTVAL
+			, #{boxUuid}
+			, #{domainId}
+			, #{domainCode}
+			, #{ownerType}
+			, #{ownerId}
+			, #{ownerName}
+			, #{boxName}
+			, COALESCE((SELECT BASIC_BOX_VOLUME FROM WH_CONFIG WHERE DOMAIN_ID = #{domainId}), 10240)
+			, 0
+			, 'Y'
+			, 'N'
+			, ''
+			, #{boxPath}
+			, SYSDATE
+		)
+	</insert>
+	
+</mapper>

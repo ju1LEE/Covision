@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="webhardAdmin.fileSearch">
+
+	<!-- 검색 조건에 해당하는 파일 목록 조회 -->
+	<select id="selectFileList" parameterType="cmap" resultType="cmap">
+		/* webhardAdmin.fileSearch.selectFileList */
+		SELECT A.*
+		FROM (
+			SELECT	  A.SEQ
+					, A.UUID
+					, A.BOX_UUID
+					, A.FOLDER_UUID
+					, A.FILE_NAME
+					, A.FILE_TYPE
+					, A.FILE_CONTENT_TYPE
+					, A.FILE_SIZE
+					, A.FILE_PATH
+					, A.FILE_GRANT
+					, A.FILE_QUICK_URL
+					, A.FILE_FLAG
+					, DATE_FORMAT(A.CREATED_DATE, '%Y-%m-%d %T') AS CREATED_DATE
+					, DATE_FORMAT(A.UPDATED_DATE, '%Y-%m-%d %T') AS UPDATED_DATE
+					, DATE_FORMAT(A.DELETED_DATE, '%Y-%m-%d %T') AS DELETED_DATE
+					, B.DOMAIN_ID
+					, B.DOMAIN_CODE
+					, B.OWNER_TYPE
+					, B.OWNER_ID
+					, B.OWNER_NAME
+					, B.BOX_PATH
+					, C.FOLDER_NAME
+					, C.PARENT_UUID
+					, C.FOLDER_PATH
+					, COALESCE(C.FOLDER_NAME_PATH, '/') AS FOLDER_NAME_PATH
+					, C.FOLDER_LEVEL
+					, C.FOLDER_GRANT
+			FROM covi_webhard4j.WH_FILE_LIST A
+			INNER JOIN covi_webhard4j.WH_BOX_LIST B ON A.BOX_UUID = B.UUID
+			LEFT JOIN covi_webhard4j.wh_FOLDER_list C ON A.FOLDER_UUID = C.UUID
+			WHERE 1=1
+			AND A.DELETED_DATE IS NULL
+			AND B.USE_YN = 'Y'
+			AND B.DOMAIN_ID = #{domainID}
+			<if test="fileType != null and fileType != ''">
+				AND UPPER(A.FILE_TYPE) LIKE UPPER(CONCAT('%', TRIM(#{fileType}), '%'))
+			</if>
+			<if test="fileName != null and fileName != ''">
+				AND UPPER(A.FILE_NAME) LIKE UPPER(CONCAT('%', TRIM(#{fileName}), '%'))
+			</if>
+			<if test="fileSizeOption != null and fileSizeOption != ''">
+				<choose>
+					<when test="fileSizeOption == 'below1MB'">
+						AND A.FILE_SIZE BETWEEN 0 AND (1024 * 1024) <!-- 1 KB = 1024 BYTE, 1 MB = 1024 KB -->
+					</when>
+					<when test="fileSizeOption == 'below10MB'">
+						AND A.FILE_SIZE BETWEEN (1024 * 1024 ) AND (1024 * 1024 * 10)
+					</when>
+					<when test="fileSizeOption == 'below100MB'">
+						AND A.FILE_SIZE BETWEEN (1024 * 1024 * 10) AND (1024 * 1024 * 100)
+					</when>
+					<otherwise>
+						AND A.FILE_SIZE <![CDATA[ >= ]]> (1024 * 1024 * 100)
+					</otherwise>
+				</choose>
+			</if>
+			<if test="periodOption != null and periodOption != ''">
+				<choose>
+					<when test="periodOption == '1Week'">
+						AND A.CREATED_DATE <![CDATA[ > ]]> SUBDATE(NOW(), INTERVAL 1 WEEK)
+					</when>
+					<when test="periodOption == '1Month'">
+						AND A.CREATED_DATE <![CDATA[ > ]]> SUBDATE(NOW(), INTERVAL 1 MONTH)
+					</when>
+					<when test="periodOption == '3Month'">
+						AND A.CREATED_DATE <![CDATA[ > ]]> SUBDATE(NOW(), INTERVAL 3 MONTH)
+					</when>
+					<when test="periodOption == '6Month'">
+						AND A.CREATED_DATE <![CDATA[ > ]]> SUBDATE(NOW(), INTERVAL 6 MONTH)
+					</when>
+					<otherwise>
+						AND A.CREATED_DATE BETWEEN CAST(#{startDate} AS DATE) AND CAST(#{endDate} AS DATE)
+					</otherwise>
+				</choose>
+			</if>
+		) A
+		<trim prefix="ORDER BY" prefixOverrides =",">
+		    <if test="sortColumn != null and sortColumn != '' and sortDirection != null and sortDirection !='' ">
+				<choose>
+					<when test='sortColumn.equalsIgnoreCase("OWNER_ID")'>A.OWNER_ID</when>
+					<when test='sortColumn.equalsIgnoreCase("OWNER_NAME")'>A.OWNER_NAME</when>
+					<when test='sortColumn.equalsIgnoreCase("FILE_TYPE")'>A.FILE_TYPE</when>
+					<when test='sortColumn.equalsIgnoreCase("FILE_NAME")'>A.FILE_NAME</when>
+					<when test='sortColumn.equalsIgnoreCase("FOLDER_NAME_PATH")'>A.FOLDER_NAME_PATH</when>
+					<when test='sortColumn.equalsIgnoreCase("FILE_SIZE")'>A.FILE_SIZE</when>
+					<otherwise>A.CREATED_DATE</otherwise>
+				</choose>
+				<choose>
+					<when test='sortDirection.equalsIgnoreCase("ASC")'> ASC</when>
+					<otherwise> DESC</otherwise>
+				</choose>
+			</if>
+		</trim>
+		<if test="pageSize != null and pageOffset != null">
+			LIMIT #{pageSize} OFFSET #{pageOffset}
+		</if>
+	</select>
+	
+	<select id="selectFileListCount" parameterType="cmap" resultType="java.lang.Long">
+		/* webhardAdmin.fileSearch.selectFileListCount */
+		SELECT COUNT(*)
+		FROM covi_webhard4j.WH_FILE_LIST A
+		INNER JOIN covi_webhard4j.WH_BOX_LIST B ON A.BOX_UUID = B.UUID
+		LEFT JOIN covi_webhard4j.wh_FOLDER_list C ON A.FOLDER_UUID = C.UUID
+		WHERE 1=1
+		AND A.DELETED_DATE IS NULL
+		AND B.USE_YN = 'Y'
+		AND B.DOMAIN_ID = #{domainID}
+		<if test="fileType != null and fileType != ''">
+			AND UPPER(A.FILE_TYPE) LIKE UPPER(CONCAT('%', TRIM(#{fileType}), '%'))
+		</if>
+		<if test="fileName != null and fileName != ''">
+			AND UPPER(A.FILE_NAME) LIKE UPPER(CONCAT('%', TRIM(#{fileName}), '%'))
+		</if>
+		<if test="fileSizeOption != null and fileSizeOption != ''">
+			<choose>
+				<when test="fileSizeOption == 'below1MB'">
+					AND A.FILE_SIZE BETWEEN 0 AND (1024 * 1024) <!-- 1 KB = 1024 BYTE, 1 MB = 1024 KB -->
+				</when>
+				<when test="fileSizeOption == 'below10MB'">
+					AND A.FILE_SIZE BETWEEN (1024 * 1024 ) AND (1024 * 1024 * 10)
+				</when>
+				<when test="fileSizeOption == 'below100MB'">
+					AND A.FILE_SIZE BETWEEN (1024 * 1024 * 10) AND (1024 * 1024 * 100)
+				</when>
+				<otherwise>
+					AND A.FILE_SIZE <![CDATA[ >= ]]> (1024 * 1024 * 100)
+				</otherwise>
+			</choose>
+		</if>
+		<if test="periodOption != null and periodOption != ''">
+			<choose>
+				<when test="periodOption == '1Week'">
+					AND A.CREATED_DATE <![CDATA[ > ]]> SUBDATE(NOW(), INTERVAL 1 WEEK)
+				</when>
+				<when test="periodOption == '1Month'">
+					AND A.CREATED_DATE <![CDATA[ > ]]> SUBDATE(NOW(), INTERVAL 1 MONTH)
+				</when>
+				<when test="periodOption == '3Month'">
+					AND A.CREATED_DATE <![CDATA[ > ]]> SUBDATE(NOW(), INTERVAL 3 MONTH)
+				</when>
+				<when test="periodOption == '6Month'">
+					AND A.CREATED_DATE <![CDATA[ > ]]> SUBDATE(NOW(), INTERVAL 6 MONTH)
+				</when>
+				<otherwise>
+					AND A.CREATED_DATE BETWEEN CAST(#{startDate} AS DATE) AND CAST(#{endDate} AS DATE)
+				</otherwise>
+			</choose>
+		</if>
+	</select>
+	
+	<update id="deleteFile" parameterType="cmap">
+		/* webhardAdmin.fileSearch.deleteFile */
+		UPDATE covi_webhard4j.WH_FILE_LIST
+		SET	  UPDATED_DATE = NOW(3)
+			, DELETED_DATE = NOW(3)
+			, TRASHBIN_FLAG = 'D'
+		WHERE 1=1
+		<if test="fileUuids != null and fileUuids.length > 0">
+			AND UUID IN
+			<foreach collection="fileUuids" item="item" index="index" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+	</update>	
+	 
+</mapper>

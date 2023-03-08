@@ -1,0 +1,1245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="webhardUser.box">
+	<select id="selectBoxCount" parameterType="cmap" resultType="java.lang.Long">
+		/* queryId : webhardUser.box.selectBoxCount */
+		SELECT COUNT(*) FROM (
+			<if	test="folderType != 'Recent'">
+				SELECT 
+					BOX_UUID AS box_uid
+					, A.UUID AS uid
+					, FOLDER_NAME AS name
+					, BOOKMARK AS bookmark
+					, 'folder' AS fileType
+					, CREATED_DATE AS createdDate
+					, '-' AS fileSize
+				FROM covi_webhard4j.wh_folder_list A
+				<if test="folderType != 'Trashbin'">
+					LEFT JOIN (
+						SELECT uuid
+						FROM covi_webhard4j.wh_folder_list
+						WHERE 1 = 1
+							AND DELETED_DATE IS NOT NULL
+							AND BOX_UUID = #{boxUuid}
+					) FL ON A.uuid = FL.uuid AND A.folder_path LIKE CONCAT('%', fl.uuid, '%')
+				</if>
+				WHERE 1=1
+				<choose>
+					<when test ="folderType == 'Trashbin'">
+						AND DELETED_DATE IS NOT NULL
+						AND TRASHBIN_FLAG = 'R'
+					</when>
+					<otherwise>
+						AND DELETED_DATE IS NULL
+					</otherwise>
+				</choose>
+				<choose>
+					<when test="folderID == '' and folderType != 'Important' and folderType != 'Recent'">
+						AND (PARENT_UUID IS NULL OR PARENT_UUID = '')
+					</when>
+				</choose>
+				<choose>
+					<when test="folderID == '' or folderID == 'ROOT'">
+						AND BOX_UUID IN ( SELECT UUID
+							FROM covi_webhard4j.wh_box_list
+							WHERE 1=1
+							AND OWNER_ID = #{userCode}
+						)
+					</when>
+					<otherwise>
+						AND PARENT_UUID = #{folderID}
+					</otherwise>
+				</choose>
+				UNION ALL
+			</if>
+			SELECT	  A.BOX_UUID AS box_uid
+					, A.UUID AS uid
+					, A.FILE_NAME AS name
+					, A.BOOKMARK AS bookmark
+					, A.FILE_TYPE AS fileType
+					, A.CREATED_DATE AS createdDate
+					, A.FILE_SIZE AS fileSize
+			FROM covi_webhard4j.wh_file_list A
+			LEFT OUTER JOIN covi_webhard4j.wh_folder_list B ON B.UUID = A.FOLDER_UUID
+			WHERE 1=1
+			<choose>
+				<when test ="folderType == 'Trashbin'">
+					AND A.DELETED_DATE IS NOT NULL
+					AND A.TRASHBIN_FLAG = 'R'
+				</when>
+				<otherwise>
+					AND A.DELETED_DATE IS NULL
+					AND NOT EXISTS (
+						SELECT UUID
+						FROM covi_webhard4j.wh_folder_list
+						WHERE 1=1
+						AND DELETED_DATE IS NOT NULL
+						AND B.FOLDER_PATH LIKE CONCAT('%', UUID, '%')
+						AND BOX_UUID = #{boxUuid}
+					)
+				</otherwise>
+			</choose>
+			<choose>
+				<when test="folderID == '' and boxUuid != '' and folderType != 'Important' and folderType != 'Recent'">
+					AND (A.FOLDER_UUID IN ( SELECT FD.UUID
+						FROM covi_webhard4j.wh_box_list AS BX
+						INNER JOIN covi_webhard4j.wh_folder_list AS FD ON (FD.BOX_UUID = BX.UUID)
+						WHERE 1=1
+						AND BX.OWNER_ID = #{userCode}
+						AND FD.PARENT_UUID IS NULL
+					) OR (A.FOLDER_UUID = '' AND A.BOX_UUID = #{boxUuid} ))
+				</when>
+				<otherwise>
+					AND (A.FOLDER_UUID IN ( SELECT FD.UUID
+						FROM covi_webhard4j.wh_box_list AS BX
+						INNER JOIN covi_webhard4j.wh_folder_list AS FD ON (FD.BOX_UUID = BX.UUID)
+						WHERE 1=1
+						AND BX.OWNER_ID = #{userCode}
+						AND FD.PARENT_UUID IS NULL
+					) OR (A.FOLDER_UUID = '' AND A.BOX_UUID IN ( SELECT UUID
+							FROM covi_webhard4j.wh_box_list
+							WHERE 1=1 AND OWNER_ID = #{userCode} )))
+				</otherwise>
+			</choose>
+			<choose>
+				<when test="folderID == 'ROOT' and (folderType == 'Important' or folderType == 'Recent' or folderType == 'Trashbin')">
+					AND (A.FOLDER_UUID IN ( SELECT FD.UUID
+					FROM covi_webhard4j.wh_box_list AS BX
+					INNER JOIN covi_webhard4j.wh_folder_list AS FD ON (FD.BOX_UUID = BX.UUID)
+					WHERE 1=1
+					AND BX.OWNER_ID = #{userCode}
+					) OR (A.FOLDER_UUID = '' AND A.BOX_UUID = #{boxUuid} ))
+				</when>
+				<otherwise>
+					AND A.FOLDER_UUID = #{folderID}
+				</otherwise>
+			</choose>
+		) AS Folder
+		WHERE 1=1
+		<if test="folderType == 'Important'">
+			AND bookmark = 'Y'
+		</if>
+		<if	 test="folderType == 'Recent'">
+			AND createdDate > date_add(now(), interval - 7 day)
+		</if>
+		<!-- TODO: 상세 조회 조건 추가 -->
+		<if test="searchText != null and searchText != ''">
+			AND name LIKE CONCAT('%',#{searchText},'%')   
+		</if>
+		<!-- TimeZone 적용 createdDate BETWEEN CONCAT(#{startDate}, ' 00:00:00') AND CONCAT(#{endDate}, ' 23:59:59') -->
+		<if test="startDate != '' or endDate != ''">
+			AND createdDate BETWEEN #{startDate} AND #{endDate}		
+		</if>
+	</select>
+
+	<select id="selectBoxList" parameterType="cmap" resultType="cmap">
+		/* queryId : webhardUser.box.selectBoxList */
+		SELECT box_uid, uid, name, bookmark, auth, fileType, createdDate, fileSize FROM (
+			<if	test="folderType != 'Recent'">
+				SELECT 
+					BOX_UUID AS box_uid
+					, A.UUID AS uid
+					, FOLDER_NAME AS name
+					, BOOKMARK AS bookmark
+					, FOLDER_GRANT AS auth
+					, 'folder' AS fileType
+					, CREATED_DATE AS createdDate
+					, '-' AS fileSize
+				FROM covi_webhard4j.wh_folder_list A
+				<if test="folderType != 'Trashbin'">
+					LEFT JOIN (
+						SELECT uuid
+						FROM covi_webhard4j.wh_folder_list
+						WHERE 1 = 1
+							AND DELETED_DATE IS NOT NULL
+					) FL ON A.uuid = FL.uuid AND A.folder_path LIKE CONCAT('%', fl.uuid, '%')
+				</if>
+				WHERE 1=1
+				<choose>
+					<when test ="folderType == 'Trashbin'">
+						AND DELETED_DATE IS NOT NULL	
+						AND TRASHBIN_FLAG = 'R'
+					</when>					
+					<otherwise>
+						AND DELETED_DATE IS NULL
+					</otherwise>
+				</choose>
+				<choose>
+					<when test="folderID == '' and folderType != 'Important' and folderType != 'Recent'">
+						AND (PARENT_UUID IS NULL OR PARENT_UUID = '')
+					</when>
+				</choose>
+				<choose>
+					<when test="folderID == '' or folderID == 'ROOT'">
+						AND BOX_UUID IN ( SELECT UUID
+							FROM covi_webhard4j.wh_box_list
+							WHERE 1=1
+							AND OWNER_ID = #{userCode}
+						)
+					</when>
+					<otherwise>
+						AND PARENT_UUID = #{folderID}
+					</otherwise>
+				</choose>
+				UNION ALL
+			</if>
+			SELECT	  A.BOX_UUID AS box_uid
+					, A.UUID AS uid
+					, A.FILE_NAME AS name
+					, A.BOOKMARK AS bookmark
+					, A.FILE_GRANT AS auth
+					, A.FILE_TYPE AS fileType
+					, A.CREATED_DATE AS createdDate
+					, A.FILE_SIZE AS fileSize
+			FROM covi_webhard4j.wh_file_list A
+			LEFT OUTER JOIN covi_webhard4j.wh_folder_list B ON B.UUID = A.FOLDER_UUID
+			WHERE 1=1
+			<choose>
+				<when test ="folderType == 'Trashbin'">
+					AND A.DELETED_DATE IS NOT NULL			
+					AND A.TRASHBIN_FLAG='R'
+				</when>
+				<otherwise>
+					AND A.DELETED_DATE IS NULL
+					AND NOT EXISTS (
+						SELECT UUID
+						FROM covi_webhard4j.wh_folder_list
+						WHERE 1=1
+						AND DELETED_DATE IS NOT NULL
+						AND B.FOLDER_PATH LIKE CONCAT('%', UUID, '%')
+					)
+				</otherwise>
+			</choose>
+			<choose>
+				<when test="folderID == '' and folderType != 'Important' and folderType != 'Recent'">
+					AND (A.FOLDER_UUID IN ( SELECT FD.UUID
+						FROM covi_webhard4j.wh_box_list AS BX
+						INNER JOIN covi_webhard4j.wh_folder_list AS FD ON (FD.BOX_UUID = BX.UUID)
+						WHERE 1=1
+						AND BX.OWNER_ID = #{userCode}
+						AND FD.PARENT_UUID IS NULL
+					) OR (A.FOLDER_UUID = '' AND A.BOX_UUID = #{boxUuid}))
+				</when>
+			</choose>
+			<choose>
+				<when test="folderID == 'ROOT' and (folderType == 'Important' or folderType == 'Recent' or folderType == 'Trashbin')">
+					AND (A.FOLDER_UUID IN ( SELECT FD.UUID
+					FROM covi_webhard4j.wh_box_list AS BX
+					INNER JOIN covi_webhard4j.wh_folder_list AS FD ON (FD.BOX_UUID = BX.UUID)
+					WHERE 1=1
+					AND BX.OWNER_ID = #{userCode}
+					) OR (A.FOLDER_UUID = '' AND A.BOX_UUID = #{boxUuid}))
+				</when>
+				<otherwise>
+					AND A.FOLDER_UUID = #{folderID}
+				</otherwise>
+			</choose>
+		) AS Folder
+		WHERE 1=1
+		<if test="folderType == 'Important'">
+			AND bookmark = 'Y'
+		</if>
+		<if	 test="folderType == 'Recent'">
+			AND createdDate > date_add(now(), interval - 7 day)
+		</if>
+		<!-- TODO: 상세 조회 조건 추가 -->
+		<if test="searchText != null and searchText != ''">
+			AND name LIKE CONCAT('%',#{searchText},'%')   
+		</if>
+		<!-- TimeZone 적용 createdDate BETWEEN CONCAT(#{startDate}, ' 00:00:00') AND CONCAT(#{endDate}, ' 23:59:59') -->
+		<if test="startDate != '' or endDate != ''">
+			AND createdDate BETWEEN #{startDate} AND #{endDate}		
+		</if>
+		<trim prefix="ORDER BY" prefixOverrides =",">
+				IF(fileType = 'folder' , 0, 1) ASC, createdDate DESC
+		</trim>
+		<if test="viewType == 'List'">
+			<if test="pageSize != null and pageOffset != null">
+				LIMIT #{pageSize} OFFSET #{pageOffset}
+			</if>
+		</if>
+	</select>
+	
+	<select id="selectFolderList" parameterType="cmap" resultType="cmap">
+		/* queryId : webhardUser.box.selectFolderList */
+		SELECT   FD.SEQ AS seq
+			, FD.UUID AS uid
+			, FD.BOX_UUID AS boxUuid
+			, FD.PARENT_UUID AS parentID
+			, FD.FOLDER_NAME AS name
+			, FD.FOLDER_GRANT AS folderGrant
+			, FD.FOLDER_NAME_PATH AS folderNamePath
+			, FD.FOLDER_PATH AS folderPath
+			,(SELECT COUNT(0) FROM covi_webhard4j.wh_folder_list AS self WHERE self.PARENT_UUID=FD.UUID AND self.DELETED_DATE IS NULL) AS hasChild
+		FROM covi_webhard4j.wh_folder_list AS FD
+		INNER JOIN covi_webhard4j.wh_box_list AS BOX ON BOX.UUID = FD.BOX_UUID 
+		WHERE FD.DELETED_DATE IS NULL	 
+		AND BOX.OWNER_TYPE = 'U' 
+		AND BOX.DOMAIN_id = #{domainID} 
+		AND BOX.OWNER_ID = #{userCode}
+		AND BOX.DELETED_DATE IS NULL
+		AND USE_YN = 'Y'
+		AND NOT EXISTS (
+			SELECT UUID
+			FROM covi_webhard4j.wh_folder_list
+			WHERE 1=1
+			AND DELETED_DATE IS NOT NULL
+			AND FD.FOLDER_PATH LIKE CONCAT('%', UUID, '%')
+			AND BOX_UUID = BOX.UUID
+		)
+	</select>
+		
+	<select id="selectSharedMember" parameterType="cmap" resultType="cmap">
+		SELECT S.SHARED_OWNER_ID AS sharedOwnerID
+				, S.SHARED_GRANT_TYPE AS sharedGrantType
+				, IF(S.SHARED_GRANT_TYPE = 'UR', U.MultiDisplayName, G.MultiDisplayName) AS sharedOwnerName
+				, IF(S.SHARED_GRANT_TYPE = 'UR', UB.MultiJobLevelName, '') AS sharedOwnerJobLevelName
+				, IF(S.SHARED_GRANT_TYPE = 'UR', UB.MultiJobPositionName, '') AS sharedOwnerJobPositionName
+				, IF(S.SHARED_GRANT_TYPE = 'UR', UB.MultiJobTitleName, '') AS sharedOwnerJobTitleName					
+				, IF(S.SHARED_GRANT_TYPE = 'UR', UB.MultiDeptName, '') AS sharedOwnerDeptName
+				, IF(S.SHARED_GRANT_TYPE = 'UR', U.PhotoPath, '') AS sharedOwnerPhotoPath
+		FROM covi_webhard4j.wh_shared_list AS S
+		LEFT JOIN covi_smart4j.sys_object_user AS U ON S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = U.UserCode AND U.IsUse = 'Y' AND U.IsDisplay = 'Y'
+		LEFT JOIN covi_smart4j.sys_object_user_basegroup AS UB ON U.UserCode = UB.UserCode AND UB.JobType = 'Origin'
+		LEFT JOIN covi_smart4j.sys_object_group AS G ON S.SHARED_GRANT_TYPE != 'UR' AND S.SHARED_OWNER_ID = G.GroupCode AND G.IsUse = 'Y'AND G.IsDisplay = 'Y'
+		WHERE S.SHARED_TYPE = #{sharedType}
+		AND SHARED_UUID =  #{sharedID}
+		AND S.SHARED_STATUS = 'ON'
+		AND S.DELETED_DATE IS NULL
+	</select>
+	
+	<select id="getBoxSizeAndRate" parameterType="cmap" resultType="cmap">
+		SELECT A.BOX_MAX_SIZE, IFNULL(CURRENT_SIZE_BYTE,0) AS CURRENT_SIZE_BYTE, IFNULL(B.CURRENT_SIZE,0) AS CURRENT_SIZE, IFNULL(CAST(ROUND((B.CURRENT_SIZE / A.BOX_MAX_SIZE) * 100, 1) AS CHAR),0) AS RATE
+		FROM covi_webhard4j.wh_box_list A
+		LEFT OUTER JOIN 
+			(
+				SELECT SUM(FILE_SIZE) AS CURRENT_SIZE_BYTE, ROUND(SUM(FILE_SIZE) / (1024 * 1024), 0) AS CURRENT_SIZE, BOX_UUID AS UUID
+				FROM covi_webhard4j.wh_file_list
+				WHERE IFNULL(`TRASHBIN_FLAG` != 'D', TRUE )
+				GROUP BY BOX_UUID
+			) B
+		ON A.UUID=B.UUID
+		WHERE  A.UUID = #{boxUuid}
+	</select>
+	
+	<select id="selectPrevFolder" parameterType="cmap" resultType="cmap">
+		SELECT IFNULL(MAX(PF.UUID), 'ROOT') AS FolderID , PF.FOLDER_NAME AS FolderName
+		FROM covi_webhard4j.wh_folder_list AS F
+		INNER JOIN covi_webhard4j.wh_folder_list AS PF ON F.PARENT_UUID = PF.UUID
+		WHERE F.UUID = #{folderID}
+		<choose>
+			<when test ="folderType == 'Trashbin'">
+				AND PF.DELETED_DATE IS NOT NULL
+			</when>
+			<otherwise>
+				AND PF.DELETED_DATE IS NULL
+			</otherwise>
+		</choose>
+		<if test="folderType == 'Recent'">
+			AND 1 != 1
+		</if>
+		<if test="folderType == 'Important'">
+			AND PF.BOOKMARK = 'Y'
+		</if>
+		<if	test="folderType == 'Shared'"> <!-- 공유받은 폴더  -->
+			
+			AND EXISTS (	SELECT	S.SEQ
+							FROM	covi_webhard4j.wh_shared_list AS S
+							WHERE	S.SHARED_TYPE = 'FOLDER' AND S.DELETED_DATE IS NULL AND S.SHARED_UUID = PF.UUID 	
+							AND	(
+									(S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID  =  #{userCode})	
+									OR ( S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>  )
+							)
+						)
+		</if>
+		<if test="folderType == 'Published'">  <!-- 공유한 폴더  -->
+				AND EXISTS (SELECT S.SEQ
+							FROM covi_webhard4j.wh_shared_list AS S
+							WHERE  S.SHARED_TYPE = 'FOLDER'
+							AND S.DELETED_DATE IS NULL
+							AND S.SHARED_UUID = PF.UUID
+							)
+		</if>
+	</select>
+	
+	<select id="getUserDriveList" parameterType="cmap" resultType="cmap">
+		/* queryId : webhardUser.box.getUserDriveList */
+		SELECT	  '' AS GROUP_CODE
+				, BOX.UUID AS BOX_UUID
+				, BOX.OWNER_ID
+				, BOX.BOX_NAME
+				, BOX.DOMAIN_CODE
+				, '' AS UUID
+				, 'U' AS OWNER_TYPE
+				, IFNULL(BOX.USE_YN, 'N') AS USE_YN
+		FROM (
+			SELECT	  #{userCode} AS OWNER_ID
+					, #{domainCode} AS DOMAIN_CODE
+			FROM DUAL
+		) D
+		LEFT OUTER JOIN covi_webhard4j.wh_box_list BOX
+		ON (
+			D.OWNER_ID = BOX.OWNER_ID
+			AND D.DOMAIN_CODE = BOX.DOMAIN_CODE
+		)
+		
+		UNION ALL
+		
+		SELECT	  sog.GroupCode AS GROUP_CODE
+				, UUID AS BOX_UUID
+				, OWNER_ID
+				, sog.DisplayName AS BOX_NAME
+				, sog.CompanyCode AS DOMAIN_CODE
+				, '' AS UUID
+				, 'G' AS OWNER_TYPE
+				, IFNULL(wbl.USE_YN, 'N') AS USE_YN
+		FROM covi_smart4j.sys_object_group sog
+		LEFT OUTER JOIN covi_webhard4j.wh_box_list wbl
+		ON (
+			sog.GroupCode = wbl.OWNER_ID
+			AND sog.CompanyCode = wbl.DOMAIN_CODE
+			AND wbl.OWNER_TYPE = 'G'
+		)
+		WHERE CONCAT(';', sog.GroupPath) LIKE CONCAT('%;', #{deptCode}, ';%')
+		AND sog.IsUse = 'Y'
+		AND sog.GroupType = 'Dept'
+
+	</select>
+	
+	<select id="getSelectDriveTreeList" parameterType="cmap" resultType="cmap">
+		/* queryID : webhardUser.box.getSelectDriveTreeList */
+		SELECT	  BOX_UUID
+				, UUID
+				, PARENT_UUID
+				, FOLDER_NAME
+				, FOLDER_PATH
+				, FOLDER_NAME_PATH
+				, FOLDER_LEVEL
+				, BOOKMARK
+				, FOLDER_GRANT
+				, TRASHBIN_FLAG
+		FROM covi_webhard4j.wh_folder_list A
+		WHERE 1=1
+		AND BOX_UUID = #{UUID}
+		AND NOT EXISTS (
+			SELECT UUID
+			FROM covi_webhard4j.wh_folder_list
+			WHERE 1=1
+			AND BOX_UUID = #{UUID}
+			AND DELETED_DATE IS NOT NULL
+			AND A.FOLDER_PATH LIKE CONCAT('%', UUID, '%')
+		)
+		AND EXISTS (
+			SELECT 'X' FROM covi_webhard4j.wh_box_list wbl
+			LEFT OUTER JOIN covi_smart4j.sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+			WHERE wbl.UUID = #{UUID}
+			AND (
+				wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+				OR (
+					wbl.OWNER_TYPE = 'G'
+					AND (
+						sog.GroupPath LIKE CONCAT('%', #{groupCode}, ';%')
+						OR #{groupPath} LIKE CONCAT('%', wbl.OWNER_ID, ';%')
+					)
+				)
+			)
+		)
+		ORDER BY
+			  CASE 
+					WHEN PARENT_UUID = ''
+					THEN CREATED_DATE
+					ELSE (
+						SELECT CREATED_DATE
+						FROM covi_webhard4j.wh_folder_list B
+						WHERE B.UUID = A.PARENT_UUID
+					)
+			  END
+			, FOLDER_NAME_PATH
+	</select>
+	
+	<select id="getSelectTreeFileList" parameterType="cmap" resultType="cmap">
+		SELECT	  UUID
+				, BOX_UUID
+				, FOLDER_UUID
+				, FILE_NAME
+				, FILE_TYPE
+				, FILE_CONTENT_TYPE
+				, FILE_SIZE
+				, FILE_GRANT
+				, BOOKMARK
+				, DATE_FORMAT(CREATED_DATE, '%Y-%m-%d %T') AS CREATED_DATE
+				, DATE_FORMAT(CREATED_DATE, '%Y%m%d') AS DATE
+				, UPDATED_DATE
+				, DELETED_DATE
+				, TRASHBIN_FLAG
+				, 'file' AS TYPE
+		FROM covi_webhard4j.wh_file_list A
+		WHERE BOX_UUID = #{BOX_UUID}
+		AND FOLDER_UUID = #{UUID}
+		AND DELETED_DATE IS NULL
+		<if test='mode != null and mode == "user"'>
+			AND EXISTS (
+				SELECT 'X' FROM covi_webhard4j.wh_box_list wbl
+				LEFT OUTER JOIN covi_smart4j.sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+				WHERE wbl.UUID = A.BOX_UUID
+				AND (
+					wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+					OR (
+						wbl.OWNER_TYPE = 'G'
+						AND (
+							sog.GroupPath LIKE CONCAT('%', #{groupCode}, ';%')
+							OR #{groupPath} LIKE CONCAT('%', wbl.OWNER_ID, ';%')
+						)
+					)
+				)
+			)
+		</if>
+	</select>
+	
+	<select id="getSelectTreeFolderList" parameterType="cmap" resultType="cmap">
+		SELECT	  UUID
+				, BOX_UUID
+				, FOLDER_NAME
+				, PARENT_UUID
+				, FOLDER_PATH
+				, FOLDER_NAME_PATH
+				, FOLDER_LEVEL
+				, DATE_FORMAT(CREATED_DATE, '%Y-%m-%d %T') AS CREATED_DATE
+				, DATE_FORMAT(CREATED_DATE, '%Y%m%d') AS DATE
+				, UPDATED_DATE
+				, BOOKMARK
+				, FOLDER_GRANT
+				, TRASHBIN_FLAG
+				, 'folder' AS TYPE
+		FROM covi_webhard4j.wh_folder_list A
+		WHERE BOX_UUID = #{BOX_UUID}
+		AND PARENT_UUID = #{UUID}
+		AND DELETED_DATE IS NULL
+		<if test='mode != null and mode == "user"'>
+			AND EXISTS (
+				SELECT 'X' FROM covi_webhard4j.wh_box_list wbl
+				LEFT OUTER JOIN covi_smart4j.sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+				WHERE wbl.UUID = A.BOX_UUID
+				AND (
+					wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+					OR (
+						wbl.OWNER_TYPE = 'G'
+						AND (
+							sog.GroupPath LIKE CONCAT('%', #{groupCode}, ';%')
+							OR #{groupPath} LIKE CONCAT('%', wbl.OWNER_ID, ';%')
+						)
+					)
+				)
+			)
+		</if>
+	</select>
+	
+	<update id="updateFolderBookmark" parameterType="cmap">
+		UPDATE 	covi_webhard4j.wh_folder_list
+		SET	  BOOKMARK = #{BOOKMARK}
+			, UPDATED_DATE = NOW(3)
+		WHERE UUID = #{UUID}
+	</update>
+	
+	<update id="updateFileBookmark" parameterType="cmap">
+		UPDATE 	covi_webhard4j.wh_file_list
+		SET	  BOOKMARK = #{BOOKMARK}
+			, UPDATED_DATE = NOW(3)
+		WHERE UUID = #{UUID}
+	</update>
+	
+	<select id="getSelectRecentFileList" parameterType="cmap" resultType="cmap"> 
+		SELECT	  UUID
+				, BOX_UUID
+				, FOLDER_UUID
+				, FILE_NAME
+				, FILE_TYPE
+				, FILE_SIZE
+				, FILE_PATH
+				, DATE_FORMAT(CREATED_DATE, '%Y-%m-%d %T') AS CREATED_DATE
+				, DATE_FORMAT(CREATED_DATE, '%Y%m%d') AS DATE
+				, BOOKMARK
+				, 'file' AS TYPE
+		FROM 	covi_webhard4j.wh_file_list
+		WHERE 	1=1
+		AND		BOX_UUID = #{BOX_UUID}
+		AND		CREATED_DATE &gt; DATE_ADD(NOW(), INTERVAL - 7 DAY)
+		AND		DELETED_DATE IS NULL
+		ORDER BY CREATED_DATE DESC
+	</select>
+	
+	<select id="getSelectImportantFolderList" parameterType="cmap" resultType="cmap">
+		SELECT	  UUID
+				, BOX_UUID
+				, FOLDER_NAME
+				, PARENT_UUID
+				, FOLDER_PATH
+				, FOLDER_NAME_PATH
+				, FOLDER_LEVEL
+				, DATE_FORMAT(CREATED_DATE, '%Y-%m-%d %T') AS CREATED_DATE
+				, DATE_FORMAT(CREATED_DATE, '%Y%m%d') AS DATE
+				, UPDATED_DATE
+				, BOOKMARK
+				, FOLDER_GRANT
+				, TRASHBIN_FLAG
+				, 'folder' AS TYPE
+		FROM 	covi_webhard4j.wh_folder_list
+		WHERE 	BOX_UUID 	= #{BOX_UUID}
+		AND		BOOKMARK	= 'Y'
+		AND		DELETED_DATE IS NULL
+	</select>
+	
+	<select id="getSelectImportantFileList" parameterType="cmap" resultType="cmap">
+		SELECT	  UUID
+				, BOX_UUID
+				, FOLDER_UUID
+				, FILE_NAME
+				, FILE_TYPE
+				, FILE_CONTENT_TYPE
+				, FILE_SIZE
+				, FILE_GRANT
+				, BOOKMARK
+				, DATE_FORMAT(CREATED_DATE, '%Y-%m-%d %T') AS CREATED_DATE
+				, DATE_FORMAT(CREATED_DATE, '%Y%m%d') AS DATE
+				, UPDATED_DATE
+				, DELETED_DATE
+				, TRASHBIN_FLAG
+				, 'file' AS TYPE
+		FROM 	covi_webhard4j.wh_file_list
+		WHERE 	BOX_UUID 	= #{BOX_UUID}
+		AND		BOOKMARK	= 'Y'
+		AND		DELETED_DATE IS NULL
+	</select>
+	
+	<select id="selectBoxPath" parameterType="cmap" resultType="cmap">
+		/* webhardUser.box.selectBoxPath */
+		SELECT	  UUID AS boxUuid
+				, DOMAIN_ID AS domainId
+				, DOMAIN_CODE AS domainCode
+				, OWNER_TYPE AS ownerType
+				, OWNER_ID AS ownerId
+				, OWNER_NAME AS ownerName
+				, BOX_NAME AS boxName
+				, BOX_MAX_SIZE AS boxMaxSize
+				, BOX_CURRENT_SIZE AS boxCurrentSize
+				, USE_YN AS useYn
+				, BLOCK_YN AS blockYn
+				, IFNULL(BLOCK_REASON, '') AS blockReason
+				, BOX_PATH AS boxPath
+		FROM covi_webhard4j.wh_box_list
+		WHERE 1=1
+		AND USE_YN = 'Y'
+		AND UUID = #{boxUuid}
+	</select>
+	
+	<select id="selectExtConfig" parameterType="cmap" resultType="String">
+		SELECT IFNULL(RESTRICTED_EXTENSIONS, '') AS RESTRICTED_EXTENSIONS
+		FROM covi_webhard4j.wh_config
+		WHERE DOMAIN_ID = #{domainID}
+	</select>
+	
+	<select id="selectDomainMaxUploadSize" parameterType="cmap" resultType="java.lang.Long">
+		SELECT IFNULL(B.MAX_UPLOAD_SIZE, A.MAX_UPLOAD_SIZE) AS MAX_UPLOAD_SIZE
+		FROM (SELECT 1024 AS MAX_UPLOAD_SIZE) A
+		LEFT OUTER JOIN(
+			SELECT MAX_UPLOAD_SIZE
+			FROM covi_webhard4j.wh_config
+			WHERE DOMAIN_ID = #{domainID}
+		) B ON 1=1
+	</select>
+	
+	<select id="selectSharedRootListCount" parameterType="cmap" resultType="java.lang.Long">
+		/* query id = webhardUser.box.selectSharedRootListCount */
+		SELECT COUNT(*)
+		FROM (
+			SELECT	  FO.UUID AS uid
+					, FO.FOLDER_NAME AS name
+					, 'folder' AS fileType
+					, FO.CREATED_DATE AS createdDate
+					, '-' AS fileSize
+			FROM covi_webhard4j.wh_shared_list AS S
+			LEFT JOIN covi_webhard4j.wh_folder_list AS FO ON  S.SHARED_UUID = FO.UUID 
+			LEFT JOIN covi_webhard4j.wh_shared_list AS SELF ON SELF.SHARED_UUID = FO.PARENT_UUID AND SELF.DELETED_DATE IS NULL AND ((SELF.SHARED_GRANT_TYPE = 'UR' AND SELF.SHARED_OWNER_ID = #{userCode}) OR (SELF.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			WHERE ((S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			AND S.SHARED_TYPE = 'FOLDER'
+			AND FO.DELETED_DATE IS NULL
+			AND S.DELETED_DATE IS NULL
+			AND SELF.SEQ IS NULL  <!-- 최상위 항목만 조회 -->
+			
+			UNION
+			
+			SELECT	  F.UUID AS uid
+					, F.FILE_NAME AS name
+					, F.FILE_TYPE AS fileType
+					, F.CREATED_DATE AS createDate
+					, F.FILE_SIZE AS fileSize 
+			FROM covi_webhard4j.wh_shared_list AS S
+			LEFT JOIN covi_webhard4j.wh_file_list AS F ON S.SHARED_UUID = F.UUID 
+			LEFT JOIN covi_webhard4j.wh_shared_list AS FS ON F.FOLDER_UUID = FS.SHARED_UUID AND FS.SHARED_TYPE = 'FOLDER' AND ((FS.SHARED_GRANT_TYPE = 'UR' AND FS.SHARED_OWNER_ID = #{userCode}) OR (FS.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			WHERE ((S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			AND S.SHARED_TYPE = 'FILE'
+			AND S.DELETED_DATE IS NULL
+			AND F.DELETED_DATE IS NULL
+			AND FS.DELETED_DATE IS NULL
+			AND FS.SEQ IS NULL
+		) AS Folder
+		WHERE 1=1
+		<if test="searchText != null and searchText != ''">
+			AND name LIKE CONCAT('%',#{searchText},'%')
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND createdDate BETWEEN #{startDate} AND #{endDate}
+		</if>
+	</select>
+
+	<select  id="selectSharedListCount" parameterType="cmap" resultType="java.lang.Long">
+		/* query id = webhardUser.box.selectSharedListCount */
+		SELECT COUNT(*)
+		FROM (
+			SELECT	  F.UUID AS uid
+					, F.FOLDER_NAME AS name
+					, 'folder' AS fileType
+					, F.CREATED_DATE AS createdDate
+					, '-' AS fileSize
+			FROM covi_webhard4j.wh_folder_list AS F
+			LEFT JOIN covi_webhard4j.wh_shared_list AS S ON F.UUID = S.SHARED_UUID AND SHARED_TYPE = 'FOLDER' AND S.DELETED_DATE IS NULL AND S.SHARED_STATUS = 'ON' AND ((S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			WHERE F.DELETED_DATE IS NULL
+			AND F.PARENT_UUID = #{folderID}
+			AND S.SEQ IS NOT NULL
+			
+			UNION
+			
+			SELECT	  F.UUID AS uid
+					, F.FILE_NAME AS name
+					, F.FILE_TYPE AS fileType
+					, F.CREATED_DATE AS createDate
+					, F.FILE_SIZE AS fileSize
+			FROM covi_webhard4j.wh_file_list AS F
+			LEFT JOIN covi_webhard4j.wh_shared_list AS S ON F.UUID = S.SHARED_UUID AND SHARED_TYPE = 'FILE' AND S.DELETED_DATE IS NULL AND S.SHARED_STATUS = 'ON' AND ((S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			WHERE F.DELETED_DATE IS NULL
+			AND F.FOLDER_UUID = #{folderID}
+			AND S.SEQ IS NOT NULL
+		) AS Folder
+		WHERE 1=1
+		<if test="searchText != null and searchText != ''">
+			AND name LIKE CONCAT('%',#{searchText},'%')
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND createdDate BETWEEN #{startDate} AND #{endDate}
+		</if>
+	</select>
+
+	<select id="selectSharedRootList" parameterType="cmap" resultType="cmap">
+		/* query id = webhardUser.box.selectSharedRootList */
+		SELECT	  box_uid
+				, uid
+				, name
+				, bookmark
+				, auth
+				, fileType
+				, createdDate
+				, fileSize
+		FROM (
+			SELECT	  FO.BOX_UUID AS box_uid 	
+					, FO.UUID AS uid
+					, FO.FOLDER_NAME AS name
+					, FO.BOOKMARK AS bookmark
+					, FO.FOLDER_GRANT AS auth
+					, 'folder' AS fileType
+					, FO.CREATED_DATE AS createdDate
+					, '-' AS fileSize
+			FROM covi_webhard4j.wh_shared_list AS S
+			LEFT JOIN covi_webhard4j.wh_folder_list AS FO ON  S.SHARED_UUID = FO.UUID 
+			LEFT JOIN covi_webhard4j.wh_shared_list AS SELF ON SELF.SHARED_UUID = FO.PARENT_UUID AND SELF.DELETED_DATE IS NULL AND ((SELF.SHARED_GRANT_TYPE = 'UR' AND SELF.SHARED_OWNER_ID = #{userCode}) OR (SELF.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			WHERE ((S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			AND S.SHARED_TYPE = 'FOLDER'
+			AND FO.DELETED_DATE IS NULL
+			AND S.DELETED_DATE IS NULL
+			AND SELF.SEQ IS NULL  <!--  최상위 항목만 조회 -->
+			
+			UNION
+			
+			SELECT	  F.BOX_UUID AS box_uid
+					, F.UUID AS uid
+					, F.FILE_NAME AS name
+					, F.BOOKMARK AS bookmark
+					, F.FILE_GRANT AS auth
+					, F.FILE_TYPE AS fileType
+					, F.CREATED_DATE AS createDate
+					, F.FILE_SIZE AS fileSize 
+			FROM covi_webhard4j.wh_shared_list AS S
+			LEFT JOIN covi_webhard4j.wh_file_list AS F ON S.SHARED_UUID = F.UUID 
+			LEFT JOIN covi_webhard4j.wh_shared_list AS FS ON F.FOLDER_UUID = FS.SHARED_UUID AND FS.SHARED_TYPE = 'FOLDER' AND ((FS.SHARED_GRANT_TYPE = 'UR' AND FS.SHARED_OWNER_ID = #{userCode}) OR (FS.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			WHERE ((S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			AND S.SHARED_TYPE = 'FILE'
+			AND S.DELETED_DATE IS NULL
+			AND F.DELETED_DATE IS NULL
+			AND FS.DELETED_DATE IS NULL
+			AND FS.SEQ IS NULL
+		) Folder
+		WHERE 1=1
+		<if test="searchText != null and searchText != ''">
+			AND name LIKE CONCAT('%',#{searchText},'%')
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND createdDate BETWEEN #{startDate} AND #{endDate}
+		</if>
+		<trim prefix="ORDER BY" prefixOverrides =",">
+				IF(fileType = 'folder', 0, 1) ASC, createdDate DESC
+		</trim>
+		<if test="viewType == 'List'">
+			<if test="pageSize != null and pageOffset != null">
+				LIMIT #{pageSize} OFFSET #{pageOffset}
+			</if>
+		</if>
+	</select>
+	
+	<select  id="selectSharedList" parameterType="cmap" resultType="cmap">
+	 /* webhardUser.box.selectSharedList */
+		SELECT	  box_uid
+				, uid
+				, name
+				, bookmark
+				, auth
+				, fileType
+				, createdDate
+				, fileSize
+		FROM (
+			SELECT	  F.BOX_UUID AS box_uid 	
+					, F.UUID AS uid
+					, F.FOLDER_NAME AS name
+					, F.BOOKMARK AS bookmark
+					, F.FOLDER_GRANT AS auth
+					, 'folder' AS fileType
+					, F.CREATED_DATE AS createdDate
+					, '-' AS fileSize
+			FROM covi_webhard4j.wh_folder_list AS F
+			LEFT JOIN covi_webhard4j.wh_shared_list AS S ON F.UUID = S.SHARED_UUID AND SHARED_TYPE = 'FOLDER' AND S.DELETED_DATE IS NULL AND S.SHARED_STATUS = 'ON' AND ((S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			WHERE F.DELETED_DATE IS NULL
+			AND F.PARENT_UUID = #{folderID}
+			AND S.SEQ IS NOT NULL
+			
+			UNION
+			
+			SELECT	  F.BOX_UUID AS box_uid
+					, F.UUID AS uid
+					, F.FILE_NAME AS name
+					, F.BOOKMARK AS bookmark
+					, F.FILE_GRANT AS auth
+					, F.FILE_TYPE AS fileType
+					, F.CREATED_DATE AS createDate
+					, F.FILE_SIZE AS fileSize
+			FROM covi_webhard4j.wh_file_list AS F
+			LEFT JOIN covi_webhard4j.wh_shared_list AS S ON F.UUID = S.SHARED_UUID AND SHARED_TYPE = 'FILE' AND S.DELETED_DATE IS NULL AND S.SHARED_STATUS = 'ON' AND ((S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}) OR (S.SHARED_OWNER_ID IN <foreach collection="subjectInArr" item="item" open="(" close=")" separator=","> #{item} </foreach>))
+			WHERE F.DELETED_DATE IS NULL
+			AND F.FOLDER_UUID = #{folderID}
+			AND S.SEQ IS NOT NULL
+		) AS Folder
+		WHERE 1=1
+		<if test="searchText != null and searchText != ''">
+			AND name LIKE CONCAT('%',#{searchText},'%')
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND createdDate BETWEEN #{startDate} AND #{endDate}
+		</if>
+		<trim prefix="ORDER BY" prefixOverrides =",">
+				IF(fileType = 'folder' , 0, 1) ASC, createdDate DESC
+		</trim>
+		<if test="viewType == 'List'">
+			<if test="pageSize != null and pageOffset != null">
+				LIMIT #{pageSize} OFFSET #{pageOffset}
+			</if>
+		</if>
+	</select>
+	
+	<select id="selectPublishedRootListCount" parameterType="cmap" resultType="java.lang.Long">
+		SELECT COUNT(*)
+		FROM (
+			SELECT	  FD.UUID AS uid
+					, FD.FOLDER_NAME AS name
+					, 'folder' AS fileType
+					, FD.CREATED_DATE AS createdDate
+					, '-' AS fileSize
+			FROM covi_webhard4j.wh_box_list AS BX
+			INNER JOIN covi_webhard4j.wh_folder_list AS FD ON FD.BOX_UUID = BX.UUID
+			LEFT JOIN covi_webhard4j.wh_shared_list AS S ON FD.UUID = S.SHARED_UUID AND S.SHARED_TYPE = 'FOLDER' AND S.SHARED_STATUS = 'ON' AND S.DELETED_DATE IS NULL
+			LEFT JOIN covi_webhard4j.wh_shared_list AS P ON FD.PARENT_UUID = P.SHARED_UUID AND P.SHARED_TYPE = 'FOLDER' AND P.SHARED_STATUS = 'ON' AND P.DELETED_DATE IS NULL
+			WHERE BX.DELETED_DATE IS NULL 
+			AND FD.DELETED_DATE IS NULL
+			AND BX.OWNER_TYPE = 'U' AND BX.OWNER_ID = #{userCode}
+			AND S.SEQ IS NOT NULL
+			AND P.SEQ IS NULL
+			
+			UNION
+			
+			SELECT	  FL.UUID AS uid
+					, FL.FILE_NAME AS name
+					, FL.FILE_TYPE AS fileType
+					, FL.CREATED_DATE AS createDate
+					, FL.FILE_SIZE AS fileSize
+			FROM  covi_webhard4j.wh_box_list AS BX
+			INNER JOIN covi_webhard4j.wh_file_list AS FL ON FL.BOX_UUID = BX.UUID
+			LEFT JOIN covi_webhard4j.wh_shared_list AS S ON FL.UUID = S.SHARED_UUID AND S.SHARED_TYPE = 'FILE' AND S.SHARED_STATUS = 'ON' AND S.DELETED_DATE IS NULL
+			LEFT JOIN covi_webhard4j.wh_shared_list AS FDS ON FL.FOLDER_UUID = FDS.SHARED_UUID AND FDS.SHARED_TYPE = 'FOLDER' AND FDS.SHARED_STATUS = 'ON' AND FDS.DELETED_DATE IS NULL
+			WHERE BX.DELETED_DATE IS NULL 
+			AND FL.DELETED_DATE IS NULL
+			AND BX.OWNER_TYPE = 'U' AND BX.OWNER_ID = #{userCode}
+			AND S.SEQ IS NOT NULL 
+			AND FDS.SEQ IS NULL
+		) AS Folder
+		WHERE 1=1
+		<!-- TODO: 상세 조회 조건 추가 -->
+		<if test="searchText != null and searchText != ''">
+			AND name LIKE CONCAT('%',#{searchText},'%')
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND createdDate BETWEEN #{startDate} AND #{endDate}
+		</if>
+	</select>
+	
+	<select id="selectPublishedListCount" parameterType="cmap" resultType="java.lang.Long">
+		SELECT COUNT(*)
+		FROM (
+			SELECT	  FD.UUID AS uid
+					, FD.FOLDER_NAME AS name
+					, 'folder' AS fileType
+					, FD.CREATED_DATE AS createdDate
+					, '-' AS fileSize
+			FROM covi_webhard4j.wh_box_list AS BX
+			INNER JOIN covi_webhard4j.wh_folder_list AS FD ON FD.BOX_UUID = BX.UUID
+			LEFT JOIN covi_webhard4j.wh_shared_list AS S ON FD.UUID = S.SHARED_UUID AND S.SHARED_TYPE = 'FOLDER' AND S.SHARED_STATUS = 'ON' AND S.DELETED_DATE IS NULL
+			WHERE BX.DELETED_DATE IS NULL 
+			AND FD.DELETED_DATE IS NULL
+			AND BX.OWNER_TYPE = 'U' AND BX.OWNER_ID = #{userCode}
+			AND S.SEQ IS NOT NULL
+			AND FD.PARENT_UUID = #{folderID}
+			
+			UNION
+			
+			SELECT	  FL.UUID AS uid
+					, FL.FILE_NAME AS name
+					, FL.FILE_TYPE AS fileType
+					, FL.CREATED_DATE AS createDate
+					, FL.FILE_SIZE AS fileSize
+			FROM  covi_webhard4j.wh_box_list AS BX
+			INNER JOIN covi_webhard4j.wh_file_list AS FL ON FL.BOX_UUID = BX.UUID
+			LEFT JOIN covi_webhard4j.wh_shared_list AS S ON FL.UUID = S.SHARED_UUID AND S.SHARED_TYPE = 'FILE' AND S.SHARED_STATUS = 'ON' AND S.DELETED_DATE IS NULL
+			WHERE BX.DELETED_DATE IS NULL 
+			AND FL.DELETED_DATE IS NULL
+			AND BX.OWNER_TYPE = 'U' AND BX.OWNER_ID = #{userCode}
+			AND S.SEQ IS NOT NULL
+			AND FL.FOLDER_UUID = #{folderID}
+		) AS Folder
+		WHERE 1=1
+		<!-- TODO: 상세 조회 조건 추가 -->
+		<if test="searchText != null and searchText != ''">
+			AND name LIKE CONCAT('%',#{searchText},'%')
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND createdDate BETWEEN #{startDate} AND #{endDate}
+		</if>
+	</select>
+
+	<select id="selectPublishedRootList" parameterType="cmap" resultType="cmap">
+		/* query id = webhardUser.box.selectPublishedRootList */
+		SELECT	  box_uid
+				, uid
+				, name
+				, bookmark
+				, auth
+				, fileType
+				, createdDate
+				, fileSize
+		FROM (
+			SELECT	  FD.BOX_UUID AS box_uid 	
+					, FD.UUID AS uid
+					, FD.FOLDER_NAME AS name
+					, FD.BOOKMARK AS bookmark
+					, FD.FOLDER_GRANT AS auth
+					, 'folder' AS fileType
+					, FD.CREATED_DATE AS createdDate
+					, '-' AS fileSize
+			FROM covi_webhard4j.wh_box_list AS BX
+			INNER JOIN covi_webhard4j.wh_folder_list AS FD ON FD.BOX_UUID = BX.UUID
+			LEFT JOIN covi_webhard4j.wh_shared_list AS S ON FD.UUID = S.SHARED_UUID AND S.SHARED_TYPE = 'FOLDER' AND S.SHARED_STATUS = 'ON' AND S.DELETED_DATE IS NULL
+			LEFT JOIN covi_webhard4j.wh_shared_list AS P ON FD.PARENT_UUID = P.SHARED_UUID AND P.SHARED_TYPE = 'FOLDER' AND P.SHARED_STATUS = 'ON' AND P.DELETED_DATE IS NULL
+			WHERE BX.DELETED_DATE IS NULL 
+			AND FD.DELETED_DATE IS NULL
+			AND BX.OWNER_TYPE = 'U' AND BX.OWNER_ID = #{userCode}
+			AND S.SEQ IS NOT NULL
+			AND P.SEQ IS NULL
+			
+			UNION
+			
+			SELECT	  FL.BOX_UUID AS box_uid
+					, FL.UUID AS uid
+					, FL.FILE_NAME AS name
+					, FL.BOOKMARK AS bookmark
+					, FL.FILE_GRANT AS auth
+					, FL.FILE_TYPE AS fileType
+					, FL.CREATED_DATE AS createDate
+					, FL.FILE_SIZE AS fileSize
+			FROM  covi_webhard4j.wh_box_list AS BX
+			INNER JOIN covi_webhard4j.wh_file_list AS FL ON FL.BOX_UUID = BX.UUID
+			LEFT JOIN covi_webhard4j.wh_shared_list AS S ON FL.UUID = S.SHARED_UUID AND S.SHARED_TYPE = 'FILE' AND S.SHARED_STATUS = 'ON' AND S.DELETED_DATE IS NULL
+			LEFT JOIN covi_webhard4j.wh_shared_list AS FDS ON FL.FOLDER_UUID = FDS.SHARED_UUID AND FDS.SHARED_TYPE = 'FOLDER' AND FDS.SHARED_STATUS = 'ON' AND FDS.DELETED_DATE IS NULL
+			WHERE BX.DELETED_DATE IS NULL 
+			AND FL.DELETED_DATE IS NULL
+			AND BX.OWNER_TYPE = 'U' AND BX.OWNER_ID = #{userCode}
+			AND S.SEQ IS NOT NULL 
+			AND FDS.SEQ IS NULL 
+		)  AS Folder
+		WHERE 1=1
+		<!-- TODO: 상세 조회 조건 추가 -->
+		<if test="searchText != null and searchText != ''">
+			AND name LIKE CONCAT('%',#{searchText},'%')
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND createdDate BETWEEN #{startDate} AND #{endDate}
+		</if>
+		<trim prefix="ORDER BY" prefixOverrides =",">
+				IF(fileType = 'folder' , 0, 1) ASC, createdDate DESC
+		</trim>
+		<if test="viewType == 'List'">
+			<if test="pageSize != null and pageOffset != null">
+				LIMIT #{pageSize} OFFSET #{pageOffset}
+			</if>
+		</if>
+	</select>	
+
+	<select id="selectPublishedList" parameterType="cmap" resultType="cmap">
+	 /* webhardUser.box.selectPublishedList */
+		SELECT	  box_uid
+				, uid
+				, name
+				, bookmark
+				, auth
+				, fileType
+				, createdDate
+				, fileSize
+		FROM (
+			SELECT	  FD.BOX_UUID AS box_uid 	
+					, FD.UUID AS uid
+					, FD.FOLDER_NAME AS name
+					, FD.BOOKMARK AS bookmark
+					, FD.FOLDER_GRANT AS auth
+					, 'folder' AS fileType
+					, FD.CREATED_DATE AS createdDate
+					, '-' AS fileSize
+			FROM covi_webhard4j.wh_box_list AS BX
+			INNER JOIN covi_webhard4j.wh_folder_list AS FD ON FD.BOX_UUID = BX.UUID
+			LEFT JOIN covi_webhard4j.wh_shared_list AS S ON FD.UUID = S.SHARED_UUID AND S.SHARED_TYPE = 'FOLDER' AND S.SHARED_STATUS = 'ON' AND S.DELETED_DATE IS NULL
+			WHERE BX.DELETED_DATE IS NULL 
+			AND FD.DELETED_DATE IS NULL
+			AND BX.OWNER_TYPE = 'U' AND BX.OWNER_ID = #{userCode}
+			AND S.SEQ IS NOT NULL
+			AND FD.PARENT_UUID = #{folderID}
+			
+			UNION
+			
+			SELECT   FL.BOX_UUID AS box_uid
+					, FL.UUID AS uid
+					, FL.FILE_NAME AS name
+					, FL.BOOKMARK AS bookmark
+					, FL.FILE_GRANT AS auth
+					, FL.FILE_TYPE AS fileType
+					, FL.CREATED_DATE AS createDate
+					, FL.FILE_SIZE AS fileSize
+			FROM  covi_webhard4j.wh_box_list AS BX
+			INNER JOIN covi_webhard4j.wh_file_list AS FL ON FL.BOX_UUID = BX.UUID
+			LEFT JOIN covi_webhard4j.wh_shared_list AS S ON FL.UUID = S.SHARED_UUID AND S.SHARED_TYPE = 'FILE' AND S.SHARED_STATUS = 'ON' AND S.DELETED_DATE IS NULL
+			WHERE BX.DELETED_DATE IS NULL 
+			AND FL.DELETED_DATE IS NULL
+			AND BX.OWNER_TYPE = 'U' AND BX.OWNER_ID = #{userCode}
+			AND S.SEQ IS NOT NULL
+			AND FL.FOLDER_UUID = #{folderID}
+		) AS Folder
+		WHERE 1=1
+		<!-- TODO: 상세 조회 조건 추가 -->
+		<if test="searchText != null and searchText != ''">
+			AND name LIKE CONCAT('%',#{searchText},'%')
+		</if>
+		<if test="startDate != '' or endDate != ''">
+			AND createdDate BETWEEN #{startDate} AND #{endDate}
+		</if>
+		<trim prefix="ORDER BY" prefixOverrides =",">
+				IF(fileType = 'folder' , 0, 1) ASC, createdDate DESC
+		</trim>
+		<if test="viewType == 'List'">
+			<if test="pageSize != null and pageOffset != null">
+				LIMIT #{pageSize} OFFSET #{pageOffset}
+			</if>
+		</if>
+	</select>
+	
+	<select id= "selectTotalFileList" parameterType="cmap" resultType="cmap">
+		/* queryID : webhardUser.box.selectTotalFileList */
+		SELECT * 
+		FROM (
+			SELECT 
+				  WFLL.UUID
+				, WFLL.BOX_UUID
+				, WBL.BOX_NAME
+				, WFLL.FOLDER_UUID	
+				, WFDL.FOLDER_NAME_PATH
+				, WFLL.FILE_NAME
+				, WFLL.FILE_TYPE
+				, WFLL.FILE_CONTENT_TYPE
+				, WFLL.FILE_SIZE
+				, WFLL.FILE_GRANT
+				, DATE_FORMAT(WFLL.CREATED_DATE, '%Y-%m-%d %T') AS CREATED_DATE
+				, DATE_FORMAT(WFLL.CREATED_DATE, '%Y%m%d') AS DATE
+				, WFLL.UPDATED_DATE
+				, WFLL.DELETED_DATE
+				, WFLL.TRASHBIN_FLAG
+				, 'file' AS TYPE
+				, NULL AS SHARED_TYPE
+			FROM covi_webhard4j.wh_file_list WFLL
+			LEFT JOIN covi_webhard4j.wh_box_list WBL ON WFLL.BOX_UUID = WBL.UUID
+			LEFT JOIN covi_webhard4j.wh_folder_list WFDL ON WFLL.FOLDER_UUID = WFDL.UUID
+			WHERE WFLL.BOX_UUID IN 
+			<foreach collection="boxUUIDArr" item="BOX_UUID" open="(" close=")" separator=",">
+				#{BOX_UUID}
+			</foreach>
+			UNION
+			SELECT 
+				  WFLL.UUID
+				, WFLL.BOX_UUID
+				, NULL AS BOX_NAME
+				, WFLL.FOLDER_UUID	
+				, WFL.FOLDER_NAME_PATH
+				, WFLL.FILE_NAME
+				, WFLL.FILE_TYPE
+				, WFLL.FILE_CONTENT_TYPE
+				, WFLL.FILE_SIZE
+				, WFLL.FILE_GRANT
+				, DATE_FORMAT(WFLL.CREATED_DATE, '%Y-%m-%d %T') AS CREATED_DATE
+				, DATE_FORMAT(WFLL.CREATED_DATE, '%Y%m%d') AS DATE
+				, WFLL.UPDATED_DATE
+				, WFLL.DELETED_DATE
+				, WFLL.TRASHBIN_FLAG
+				, 'file' AS TYPE
+				, WSL.SHARED_TYPE
+			FROM covi_webhard4j.wh_file_list WFLL
+			LEFT JOIN covi_webhard4j.wh_shared_list WSL ON WFLL.UUID = WSL.SHARED_UUID
+			LEFT JOIN covi_webhard4j.wh_folder_list WFL ON WFLL.FOLDER_UUID = WFL.UUID
+			<where>
+				<if test="userCode != null and userCode != ''">
+					OR (
+						WSL.SHARED_OWNER_ID = #{userCode}
+						AND WSL.SHARED_GRANT_TYPE = 'UR'
+					)</if>
+				<if test="deptCode != null and deptCode != ''">
+					OR (
+						WSL.SHARED_OWNER_ID = #{deptCode}
+						AND WSL.SHARED_GRANT_TYPE = 'GR'
+					)</if>
+				<if test="subjectInArr != null">
+					OR WSL.SHARED_OWNER_ID IN 
+					<foreach collection="subjectInArr" item="item" open="(" close=")" separator=",">
+					 	#{item} 
+					</foreach>
+				</if>
+			</where>
+		) T
+		WHERE
+		<if test="searchText != null and searchText != ''">
+		FILE_NAME LIKE CONCAT('%', #{searchText}, '%') AND
+		</if>
+		<if test="startDate != null and startDate != '' and endDate != null and endDate != ''">
+		CREATED_DATE BETWEEN #{startDate} AND #{endDate} AND
+		</if>
+		DELETED_DATE IS NULL AND 
+		T.UUID NOT IN (
+			SELECT SHARED_UUID FROM covi_webhard4j.wh_shared_list WHERE DELETED_DATE IS NOT NULL
+		)
+		ORDER BY CREATED_DATE
+		 <if test="pageSize != null and pageOffset != null">
+	   		LIMIT #{pageSize} OFFSET #{pageOffset}
+	   	</if>
+	</select>
+	
+	<select id="selectTotalFileListCount" parameterType="cmap" resultType="java.lang.Long">
+		/* queryID : webhardUser.box.selectTotalFileListCount */
+		SELECT COUNT(*) 
+		FROM (
+			SELECT 
+				  WFLL.UUID
+				, WFLL.BOX_UUID
+				, WBL.BOX_NAME
+				, WFLL.FOLDER_UUID	
+				, WFDL.FOLDER_NAME_PATH
+				, WFLL.FILE_NAME
+				, WFLL.FILE_TYPE
+				, WFLL.FILE_CONTENT_TYPE
+				, WFLL.FILE_SIZE
+				, WFLL.FILE_GRANT
+				, DATE_FORMAT(WFLL.CREATED_DATE, '%Y-%m-%d %T') AS CREATED_DATE
+				, DATE_FORMAT(WFLL.CREATED_DATE, '%Y%m%d') AS DATE
+				, WFLL.UPDATED_DATE
+				, WFLL.DELETED_DATE
+				, WFLL.TRASHBIN_FLAG
+				, 'file' AS TYPE
+				, NULL AS SHARED_TYPE
+			FROM covi_webhard4j.wh_file_list WFLL
+			LEFT JOIN covi_webhard4j.wh_box_list WBL ON WFLL.BOX_UUID = WBL.UUID
+			LEFT JOIN covi_webhard4j.wh_folder_list WFDL ON WFLL.FOLDER_UUID = WFDL.UUID
+			WHERE WFLL.BOX_UUID IN 
+			<foreach collection="boxUUIDArr" item="BOX_UUID" open="(" close=")" separator=",">
+				#{BOX_UUID}
+			</foreach>
+			UNION
+			SELECT 
+				  WFLL.UUID
+				, WFLL.BOX_UUID
+				, NULL AS BOX_NAME
+				, WFLL.FOLDER_UUID	
+				, WFL.FOLDER_NAME_PATH
+				, WFLL.FILE_NAME
+				, WFLL.FILE_TYPE
+				, WFLL.FILE_CONTENT_TYPE
+				, WFLL.FILE_SIZE
+				, WFLL.FILE_GRANT
+				, DATE_FORMAT(WFLL.CREATED_DATE, '%Y-%m-%d %T') AS CREATED_DATE
+				, DATE_FORMAT(WFLL.CREATED_DATE, '%Y%m%d') AS DATE
+				, WFLL.UPDATED_DATE
+				, WFLL.DELETED_DATE
+				, WFLL.TRASHBIN_FLAG
+				, 'file' AS TYPE
+				, WSL.SHARED_TYPE
+			FROM covi_webhard4j.wh_file_list WFLL
+			LEFT JOIN covi_webhard4j.wh_shared_list WSL ON WFLL.UUID = WSL.SHARED_UUID
+			LEFT JOIN covi_webhard4j.wh_folder_list WFL ON WFLL.FOLDER_UUID = WFL.UUID
+			<where>
+				<if test="userCode != null and userCode != ''">
+					OR (
+						WSL.SHARED_OWNER_ID = #{userCode}
+						AND WSL.SHARED_GRANT_TYPE = 'UR'
+					)</if>
+				<if test="deptCode != null and deptCode != ''">
+					OR (
+						WSL.SHARED_OWNER_ID = #{deptCode}
+						AND WSL.SHARED_GRANT_TYPE = 'GR'
+					)</if>
+				<if test="subjectInArr != null">
+					OR WSL.SHARED_OWNER_ID IN 
+					<foreach collection="subjectInArr" item="item" open="(" close=")" separator=",">
+					 	#{item} 
+					</foreach>
+				</if>
+			</where>
+		) T
+		WHERE
+		<if test="searchText != null and searchText != ''">
+		FILE_NAME LIKE CONCAT('%', #{searchText}, '%') AND
+		</if>
+		<if test="startDate != null and startDate != '' and endDate != null and endDate != ''">
+		CREATED_DATE BETWEEN #{startDate} AND #{endDate} AND
+		</if>
+		DELETED_DATE IS NULL AND 
+		T.UUID NOT IN (
+			SELECT SHARED_UUID FROM covi_webhard4j.wh_shared_list WHERE DELETED_DATE IS NOT NULL
+		)
+	</select>
+</mapper>

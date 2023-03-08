@@ -1,0 +1,470 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="webhardCommon.folder">
+
+	<resultMap id="folderInfoMap" type="cmap">
+		<result property="seq" column="SEQ" />
+		<result property="boxUuid" column="BOX_UUID" />
+		<result property="domainId" column="DOMAIN_ID" />
+		<result property="domainCode" column="DOMAIN_CODE" />
+		<result property="ownerType" column="OWNER_TYPE" />
+		<result property="ownerId" column="OWNER_ID" />
+		<result property="ownerName" column="OWNER_NAME" />
+		<result property="boxName" column="BOX_NAME" />
+		<result property="boxMaxSize" column="BOX_MAX_SIZE" />
+		<result property="boxCurrentSize" column="BOX_CURRENT_SIZE" />
+		<result property="useYn" column="USE_YN" />
+		<result property="blockYn" column="BLOCK_YN" />
+		<result property="blockReason" column="BLOCK_REASON" />
+		<result property="boxPath" column="BOX_PATH" />
+		<result property="folderUuid" column="UUID" />
+		<result property="parentUuid" column="PARENT_UUID" />
+		<result property="folderName" column="FOLDER_NAME" />
+		<result property="folderLevel" column="FOLDER_LEVEL" />
+		<result property="folderPath" column="FOLDER_PATH" />
+		<result property="folderNamePath" column="FOLDER_NAME_PATH" />
+		<result property="bookmark" column="FOLDER_BOOKMARK" />
+		<result property="folderGrant" column="FOLDER_GRANT" />
+		<result property="createdDate" column="CREATED_DATE" />
+		<result property="updatedDate" column="UPDATED_DATE" />
+		<result property="deletedDate" column="DELETED_DATE" />
+	</resultMap>
+
+	<!-- UUID로 폴더 조회 -->
+	<select id="selectFolder" parameterType="cmap" resultMap="folderInfoMap">
+		/* webhardCommon.folder.selectFolder */
+		SELECT
+			A.SEQ,
+			A.BOX_UUID,
+			B.DOMAIN_ID,
+			B.DOMAIN_CODE,
+			B.OWNER_TYPE,
+			B.OWNER_ID,
+			B.OWNER_NAME,
+			B.BOX_NAME,
+			B.BOX_MAX_SIZE,
+			B.BOX_CURRENT_SIZE,
+			B.USE_YN,
+			B.BLOCK_YN,
+			B.BLOCK_REASON,
+			B.BOX_PATH, 
+			A.UUID,
+			A.PARENT_UUID,
+			A.FOLDER_NAME, 
+			A.FOLDER_LEVEL,
+			A.FOLDER_PATH, 
+			A.FOLDER_NAME_PATH,
+			A.FOLDER_BOOKMARK, 
+			A.FOLDER_GRANT,
+			TO_CHAR(A.CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS CREATED_DATE,
+			TO_CHAR(A.UPDATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS UPDATED_DATE,
+			TO_CHAR(A.DELETED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS DELETED_DATE
+		FROM WH_FOLDER_LIST A
+		INNER JOIN WH_BOX_LIST B
+		ON A.BOX_UUID = B.UUID
+		WHERE A.DELETED_DATE IS NULL
+		AND B.USE_YN = 'Y'
+		AND A.UUID = #{folderUuid}
+		<if test="boxUuid != null and boxUuid != ''">
+			AND B.UUID = #{boxUuid}
+		</if>
+		<if test="domainId != null and domainId != ''">
+			AND B.DOMAIN_ID = #{domainId}
+		</if>
+	</select>
+	
+	<!-- UUID로 대상 파일 목록 조회 -->
+	<select id="selectFolderList" parameterType="cmap" resultMap="folderInfoMap">
+		/* webhardCommon.folder.selectFolderList */
+		SELECT
+			A.SEQ,
+			A.BOX_UUID,
+			B.DOMAIN_ID,
+			B.DOMAIN_CODE,
+			B.OWNER_TYPE,
+			B.OWNER_ID,
+			B.OWNER_NAME,
+			B.BOX_NAME,
+			B.BOX_MAX_SIZE,
+			B.BOX_CURRENT_SIZE,
+			B.USE_YN,
+			B.BLOCK_YN,
+			B.BLOCK_REASON,
+			B.BOX_PATH, 
+			A.UUID,
+			A.PARENT_UUID,
+			A.FOLDER_NAME, 
+			A.FOLDER_LEVEL,
+			A.FOLDER_PATH, 
+			A.FOLDER_NAME_PATH,
+			A.FOLDER_BOOKMARK, 
+			A.FOLDER_GRANT,
+			A.CREATED_DATE,
+			A.UPDATED_DATE,
+			A.DELETED_DATE
+		FROM WH_FOLDER_LIST A
+		INNER JOIN WH_BOX_LIST B
+		ON A.BOX_UUID = B.UUID
+		<choose>
+			<when test="folderType != 'Trashbin'">
+				WHERE A.DELETED_DATE IS NULL
+			</when>
+			<otherwise>
+				WHERE A.DELETED_DATE IS NOT NULL
+				AND (A.TRASHBIN_FLAG !='D' or A.TRASHBIN_FLAG IS NULL)
+			</otherwise>
+		</choose>
+		AND B.USE_YN = 'Y'
+		AND A.UUID IN
+		<foreach collection="folderUuids" item="item" index="index" separator="," open="(" close=")">
+			#{item}
+		</foreach>
+		ORDER BY FOLDER_NAME_PATH
+	</select>
+	
+	<!-- FOLDER_PATH 값에 특정 폴더를 포함하는 모든 폴더 조회 -->
+	<select id="selectFolderListInPath" parameterType="cmap" resultMap="folderInfoMap">
+		/* webhardCommon.folder.selectFolderListInPath */
+		SELECT	  SEQ
+				, BOX_UUID
+				, PARENT_UUID
+				, UUID
+				, FOLDER_NAME
+				, FOLDER_LEVEL
+				, FOLDER_PATH
+				, FOLDER_NAME_PATH
+				, FOLDER_BOOKMARK
+				, FOLDER_GRANT
+				, CREATED_DATE
+				, UPDATED_DATE
+				, DELETED_DATE
+		FROM WH_FOLDER_LIST 
+		WHERE DELETED_DATE IS NULL
+		AND (
+			FOLDER_PATH = #{folderPath}
+			OR FOLDER_PATH LIKE #{folderPath} || '/%'
+		)
+		AND FOLDER_LEVEL <![CDATA[ >= ]]> #{folderLevel}
+		AND BOX_UUID = #{boxUuid}
+		ORDER BY FOLDER_LEVEL, FOLDER_NAME
+	</select>
+
+	<!-- 폴더 신규 생성 -->
+	<insert id="insertFolder" parameterType="cmap">
+		/* webhardCommon.folder.insertFolder */
+		INSERT INTO WH_FOLDER_LIST (
+			SEQ,
+			BOX_UUID, UUID, PARENT_UUID, FOLDER_LEVEL, 
+			FOLDER_NAME, FOLDER_PATH, FOLDER_NAME_PATH, 
+			FOLDER_BOOKMARK, FOLDER_GRANT,
+			CREATED_DATE
+		) VALUES (
+			SEQ_WH_FOLDER_LIST.NEXTVAL,
+			#{boxUuid}, #{folderUuid}, #{parentUuid}, #{folderLevel},
+			Fn_CheckFolderName(#{boxUuid}, #{parentUuid}, #{folderName}), #{folderPath}, Fn_CheckFolderNamePath(#{boxUuid}, #{parentUuid}, #{folderName}),
+			#{bookmark}, #{folderGrant},
+			SYSDATE
+		)
+	</insert>
+	
+	<!-- 폴더 목록 삭제 -->
+	<update id="deleteFolderList" parameterType="cmap">
+		/* webhardCommon.folder.deleteFolderList */
+		UPDATE WH_FOLDER_LIST A
+		SET	  DELETED_DATE = SYSDATE
+			, TRASHBIN_FLAG = 'R'
+		WHERE UUID IN
+		<foreach collection="folderUuids" item="item" index="index" separator="," open="(" close=")">
+			#{item}
+		</foreach>
+		AND EXISTS (
+			SELECT 'X' FROM wh_box_list wbl
+			LEFT OUTER JOIN sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+			WHERE wbl.UUID = A.BOX_UUID
+			AND (
+				wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+				OR (
+					wbl.OWNER_TYPE = 'G'
+					AND (
+						sog.GroupPath LIKE '%' || #{groupCode} || ';%'
+						OR #{groupPath} LIKE '%' || wbl.OWNER_ID || ';%'
+					)
+				)
+			)
+		)
+	</update>
+	
+	<!-- 폴더 공유 목록 삭제 -->
+	<update id="deleteFolderSharedList" parameterType="cmap">
+		/* webhardCommon.folder.deleteFolderSharedList */
+		UPDATE WH_SHARED_LIST 
+		SET DELETED_DATE = SYSDATE
+		WHERE SHARED_TYPE = 'FOLDER'
+		AND SHARED_UUID IN 
+		<foreach collection="folderUuids" item="item" index="index" separator="," open="(" close=")">
+			#{item}
+		</foreach>
+	</update>
+	
+	<!-- 휴지통에서 폴더 삭제  -->
+	<update id="deleteFolderListFromTrashbin" parameterType="cmap">
+		/* webhardCommon.folder.deleteFolderListFromTrashbin */
+		UPDATE WH_FOLDER_LIST A
+		SET	  UPDATED_DATE = SYSDATE
+			, DELETED_DATE = SYSDATE
+			, TRASHBIN_FLAG = 'D'
+		WHERE 1=1
+		<if test="folderUuids != null and folderUuids.size > 0">
+			<foreach collection="folderUuids" item="item" index="index" separator="OR " open="AND (" close=")">
+				FOLDER_PATH LIKE '%' || #{item} || '%'
+			</foreach>
+		</if>
+		AND EXISTS (
+			SELECT 'X' FROM wh_box_list wbl
+			LEFT OUTER JOIN sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+			WHERE wbl.UUID = A.BOX_UUID
+			AND (
+				wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+				OR (
+					wbl.OWNER_TYPE = 'G'
+					AND (
+						sog.GroupPath LIKE '%' || #{groupCode} || ';%'
+						OR #{groupPath} LIKE '%' || wbl.OWNER_ID || ';%'
+					)
+				)
+			)
+		)
+	</update>
+	
+	<insert id="insertFolderInfo" parameterType="cmap">
+		/* webhardCommon.folder.insertFolderInfo */
+		INSERT INTO WH_FOLDER_LIST (
+			SEQ,
+			BOX_UUID, UUID, PARENT_UUID, FOLDER_LEVEL, 
+			FOLDER_NAME, FOLDER_PATH, FOLDER_NAME_PATH, 
+			FOLDER_BOOKMARK, FOLDER_GRANT, CREATED_DATE
+		) VALUES (
+			SEQ_WH_FOLDER_LIST.NEXTVAL,
+			#{boxUuid}, #{folderUuid}, #{parentUuid}, #{folderLevel},
+			Fn_CheckFolderName(#{boxUuid}, #{parentUuid}, #{folderName}), #{folderPath}, Fn_CheckFolderNamePath(#{boxUuid}, #{parentUuid}, #{folderName}),
+			#{bookmark}, #{folderGrant}, SYSDATE
+		)
+	</insert>
+	
+	<!-- 폴더 복사 -->
+	<insert id="insertCopyFolder" parameterType="cmap">
+		/* webhardCommon.folder.insertCopyFolder */
+		INSERT INTO WH_FOLDER_LIST (
+			SEQ,
+			BOX_UUID, UUID, PARENT_UUID, FOLDER_LEVEL, 
+			FOLDER_NAME, FOLDER_PATH, FOLDER_NAME_PATH, 
+			FOLDER_BOOKMARK, FOLDER_GRANT,
+			CREATED_DATE
+		) VALUES (
+			SEQ_WH_FOLDER_LIST.NEXTVAL,
+			#{boxUuid}, #{newFolderUuid}, #{parentUuid}, #{folderLevel},
+			Fn_CheckFolderName(#{boxUuid}, #{parentUuid}, #{folderName}), #{folderPath}, Fn_CheckFolderNamePath(#{boxUuid}, #{parentUuid}, #{folderName}),
+			#{bookmark}, #{folderGrant},
+			SYSDATE
+		)
+	</insert>
+	
+	<select id="selectFolderPath" parameterType="cmap" resultMap="folderInfoMap">
+		/* webhardCommon.folder.selectFolderPath */
+		SELECT	  A.BOX_UUID
+				, B.DOMAIN_ID
+				, B.DOMAIN_CODE
+				, B.OWNER_TYPE
+				, B.OWNER_ID
+				, B.OWNER_NAME
+				, B.BOX_NAME
+				, B.BOX_MAX_SIZE
+				, B.BOX_CURRENT_SIZE
+				, B.USE_YN
+				, B.BLOCK_YN
+				, NVL(B.BLOCK_REASON, '') AS BLOCK_REASON
+				, B.BOX_PATH
+				, A.UUID
+				, A.PARENT_UUID
+				, A.FOLDER_NAME
+				, A.FOLDER_LEVEL
+				, A.FOLDER_PATH
+				, A.FOLDER_NAME_PATH
+				, A.FOLDER_GRANT
+				, A.BOOKMARK
+		FROM WH_FOLDER_LIST A
+		INNER JOIN WH_BOX_LIST B ON A.BOX_UUID = B.UUID
+		WHERE 1=1
+		AND B.USE_YN = 'Y'
+		AND A.UUID = #{folderUuid}
+		<if test="boxUuid != null and boxUuid != ''">
+			AND B.UUID = #{boxUuid}
+		</if>
+		<if test="domainId != null and domainId != ''">
+			AND B.DOMAIN_ID = #{domainId}
+		</if>
+	</select>
+	
+	<update id="renameFolder" parameterType="cmap">
+		UPDATE wh_folder_list A
+		SET   FOLDER_NAME = #{folderName}
+			, FOLDER_NAME_PATH = #{thisFolderNamePath}
+			, UPDATED_DATE = SYSDATE
+		WHERE UUID = #{folderUuid}
+		AND EXISTS (
+			SELECT 'X' FROM wh_box_list wbl
+			LEFT OUTER JOIN sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+			WHERE wbl.UUID = A.BOX_UUID
+			AND (
+				wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+				OR (
+					wbl.OWNER_TYPE = 'G'
+					AND (
+						sog.GroupPath LIKE '%' || #{groupCode} || ';%'
+						OR #{groupPath} LIKE '%' || wbl.OWNER_ID || ';%'
+					)
+				)
+			)
+		)
+	</update>
+	
+	<update id="renameFolderNamePath" parameterType="cmap">
+		UPDATE wh_folder_list A
+		SET FOLDER_NAME_PATH = REPLACE(FOLDER_NAME_PATH, #{exFolderNamePath}, #{folderNamePath})
+		WHERE FOLDER_PATH LIKE '%' || #{folderUuid} || '%'
+		AND UUID != #{folderUuid}
+		AND EXISTS (
+			SELECT 'X' FROM wh_box_list wbl
+			LEFT OUTER JOIN sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+			WHERE wbl.UUID = A.BOX_UUID
+			AND (
+				wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+				OR (
+					wbl.OWNER_TYPE = 'G'
+					AND (
+						sog.GroupPath LIKE '%' || #{groupCode} || ';%'
+						OR #{groupPath} LIKE '%' || wbl.OWNER_ID || ';%'
+					)
+				)
+			)
+		)
+	</update>
+	
+	<update id="restoreFolder" parameterType="cmap">
+		UPDATE wh_folder_list A
+		SET	  UPDATED_DATE = SYSDATE
+			, DELETED_DATE = NULL
+			, TRASHBIN_FLAG = NULL
+		WHERE UUID IN
+		<foreach collection="folderUuids" item="item" index="index" separator="," open="(" close=")">
+			#{item}
+		</foreach>
+		AND EXISTS (
+			SELECT 'X' FROM wh_box_list wbl
+			LEFT OUTER JOIN sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+			WHERE wbl.UUID = A.BOX_UUID
+			AND (
+				wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+				OR (
+					wbl.OWNER_TYPE = 'G'
+					AND (
+						sog.GroupPath LIKE '%' || #{groupCode} || ';%'
+						OR #{groupPath} LIKE '%' || wbl.OWNER_ID || ';%'
+					)
+				)
+			)
+		)
+	</update>
+	
+	<!-- 폴더 다운로드 리스트 -->
+	<select id="selectDownFolderList" parameterType="cmap" resultMap="folderInfoMap">
+		SELECT	  A.UUID
+				, A.BOX_UUID
+				, A.PARENT_UUID
+				, A.FOLDER_NAME
+				, A.FOLDER_LEVEL
+				, A.FOLDER_PATH
+				, SUBSTR(A.FOLDER_NAME_PATH, (INSTR(A.FOLDER_NAME_PATH, B.FOLDER_NAME) - 1)) AS FOLDER_NAME_PATH
+				, A.FOLDER_BOOKMARK
+				, A.FOLDER_GRANT
+				, A.CREATED_DATE
+				, A.UPDATED_DATE
+				, A.DELETED_DATE
+		FROM wh_folder_list A
+		LEFT OUTER JOIN wh_folder_list B ON B.UUID = #{folderUuid}
+		WHERE 1=1
+		AND A.DELETED_DATE IS NULL
+		AND A.TRASHBIN_FLAG IS NULL
+		AND A.FOLDER_PATH LIKE '%' || #{folderUuid} || '%'
+		<if test='mode != null and mode == "user"'>
+			AND EXISTS (
+				SELECT 'X' FROM wh_box_list wbl
+				LEFT OUTER JOIN sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+				WHERE wbl.UUID = A.BOX_UUID
+				AND (
+					wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+					OR (
+						wbl.OWNER_TYPE = 'G'
+						AND (
+							sog.GroupPath LIKE '%' || #{groupCode} || ';%'
+							OR #{groupPath} LIKE '%' || wbl.OWNER_ID || ';%'
+						)
+					)
+				)
+				
+				UNION ALL
+				
+				SELECT 'X' FROM wh_shared_list S
+				LEFT OUTER JOIN sys_object_group sog ON S.SHARED_GRANT_TYPE = 'GR' AND S.SHARED_OWNER_ID = sog.GroupCode
+				WHERE A.UUID = S.SHARED_UUID
+				AND S.SHARED_TYPE = 'FOLDER'
+				AND S.SHARED_STATUS = 'ON'
+				AND S.DELETED_DATE IS NULL
+				AND (
+					S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}
+					OR (
+						S.SHARED_GRANT_TYPE = 'GR'
+						AND (
+							sog.GroupPath LIKE '%' || #{groupCode} || ';%'
+							OR #{groupPath} LIKE '%' || S.SHARED_OWNER_ID || ';%'
+						)
+					) 
+				)
+			)
+		</if>
+	</select>
+	
+	<!-- 휴지통 폴더 목록 -->
+	<select id="selectTrashbinFolderList" parameterType="cmap" resultType="cmap">
+		SELECT	  A.UUID
+				, A.BOX_UUID
+				, A.FOLDER_NAME
+				, A.PARENT_UUID
+				, A.FOLDER_PATH
+				, A.FOLDER_NAME_PATH
+				, A.FOLDER_LEVEL
+				, TO_CHAR(A.CREATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS CREATED_DATE
+				, TO_CHAR(A.CREATED_DATE, 'YYYYMMDD') AS "DATE"
+				, TO_CHAR(A.UPDATED_DATE, 'YYYY-MM-DD HH24:MI:SS') AS UPDATED_DATE
+				, A.BOOKMARK
+				, A.FOLDER_GRANT
+				, A.TRASHBIN_FLAG
+				, 'folder' AS TYPE
+		FROM WH_FOLDER_LIST A
+		INNER JOIN WH_BOX_LIST B ON A.BOX_UUID = B.UUID AND B.USE_YN = 'Y'
+		WHERE 1=1
+		AND A.BOX_UUID = #{BOX_UUID}
+		AND A.DELETED_DATE IS NOT NULL
+		AND (A.TRASHBIN_FLAG != 'D' OR A.TRASHBIN_FLAG IS NULL)
+	</select>
+	
+	<select id="selectFolderName" parameterType="cmap" resultType="String">
+		SELECT FOLDER_NAME
+		FROM WH_FOLDER_LIST
+		WHERE 1=1
+		AND UUID = #{folderUuid}
+		AND BOX_UUID = #{boxUuid}
+	</select>
+	
+</mapper>

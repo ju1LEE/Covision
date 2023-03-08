@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="framework.logger">
+    <insert id="setPageMoveLog"  parameterType="cmap">
+        INSERT INTO log_pagemove(UserCode, LogonID, SiteName, PageURL, PageParam, ObjectID, ObjectType, IPAddress, MoveDate, CompanyCode)
+        values(#{USERID},#{LOGONID},#{SITENAME},#{PAGEURL}, #{PAGEPARAM}, #{OBJECTID}, #{OBJECTTYPE}, #{IPADDRESS}, sysdate, #{COMPANYCODE} )
+	</insert>
+	
+</mapper>

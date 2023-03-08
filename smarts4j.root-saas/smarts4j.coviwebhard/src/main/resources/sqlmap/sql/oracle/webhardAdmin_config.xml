@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="webhardAdmin.config">
+	
+	<select id="selectConfigInfo" parameterType="cmap" resultType="cmap">
+		/* webhardAdmin.config.selectConfigInfo */
+		SELECT	  DOMAIN_ID
+	 			, BASIC_BOX_VOLUME
+				, MAX_UPLOAD_SIZE
+				, NVL(RESTRICTED_EXTENSIONS, '') AS RESTRICTED_EXTENSIONS
+				, NVL(IS_SHARING, '') AS IS_SHARING
+				, CREATED_DATE
+				, NVL(UPDATED_DATE, '') AS UPDATED_DATE
+		FROM WH_CONFIG
+		WHERE DOMAIN_ID = #{domainID}
+	</select>
+	
+	<insert id="insertConfigInfo" parameterType="cmap">
+		/* webhardAdmin.config.insertConfigInfo */
+		INSERT INTO WH_CONFIG (
+			  DOMAIN_ID
+			, BASIC_BOX_VOLUME
+			, MAX_UPLOAD_SIZE
+			, RESTRICTED_EXTENSIONS
+			, IS_SHARING
+			, CREATED_DATE
+		) VALUES (
+			  #{domainID}
+			, #{boxVolume}
+			, #{maxUploadSize}
+			, #{extensions}
+			, #{isSharing}
+			, SYSDATE
+		)
+	</insert>
+	
+	<update id="updateConfigInfo" parameterType="cmap">
+		/* webhardAdmin.config.updateConfigInfo */
+		UPDATE WH_CONFIG
+		SET	  BASIC_BOX_VOLUME = #{boxVolume}
+			, MAX_UPLOAD_SIZE = #{maxUploadSize}
+			, RESTRICTED_EXTENSIONS = #{extensions}
+			, IS_SHARING = #{isSharing}
+			, UPDATED_DATE = SYSDATE
+		WHERE DOMAIN_ID = #{domainID}
+	</update>
+
+	<select id="selectMigBoxList" resultType="cmap">
+		/* queryID = webhardAdmin.config.selectMigBoxList */
+		SELECT
+                TT1.*
+		FROM	(
+				SELECT
+						T1.DOMAIN_ID
+                        , T1.BOX_PATH
+                        , T1.DOMAIN_CODE
+                        , T1.OWNER_ID
+						, SUBSTRING_INDEX(T2.MailAddress, '@', -1) AS MAIL_DOMAIN
+						, T1.UUID, T2.MailAddress AS MAIL_ADDRESS
+				FROM 	wh_box_list AS T1
+					INNER JOIN sys_object_user T2 ON T1.OWNER_ID = T2.UserCode
+				WHERE	T1.OWNER_TYPE = 'U'
+		) TT1
+		WHERE	TT1.BOX_PATH LIKE CONCAT('%', TT1.MAIL_DOMAIN)
+		ORDER BY TT1.DOMAIN_ID ASC
+	</select>
+	
+	<select id="selectMigFolderList" resultType="cmap">
+		/* queryID = webhardAdmin.config.selectMigFolderList */
+		SELECT	T1.DOMAIN_ID, T2.FOLDER_LEVEL, T2.BOX_UUID, T2.PARENT_UUID, T2.FOLDER_PATH, T2.UUID, T1.DOMAIN_CODE
+		FROM 	wh_box_list AS T1
+			INNER JOIN wh_folder_list T2 ON T2.BOX_UUID = T1.UUID
+		ORDER BY T1.DOMAIN_ID ASC, T2.FOLDER_PATH ASC, T2.FOLDER_LEVEL ASC
+	</select>
+	
+	<select id="selectMigFileList" resultType="cmap">
+		/* queryID = webhardAdmin.config.selectMigFileList */
+		SELECT	
+				T2.DOMAIN_ID, T1.DELETED_DATE
+				, CASE WHEN T1.DELETED_DATE IS NULL THEN CONCAT(T2.BOX_PATH, '/files',T1.FILE_PATH)	
+					ELSE CONCAT(T2.BOX_PATH, '/files_trashbin',T1.FILE_PATH)
+		            END	AS ASIS_PATH
+				, CASE WHEN T1.FOLDER_UUID = '' THEN CONCAT('/',T1.BOX_UUID)
+					ELSE ( SELECT CONCAT('/', BOX_UUID, FOLDER_PATH) FROM wh_folder_list WHERE UUID = T1.FOLDER_UUID)
+					END	AS TOBE_PATH
+				, T1.UUID AS FILE_UUID, T1.BOX_UUID, T1.FOLDER_UUID, T1.FILE_NAME, T1.FILE_SIZE, T1.FILE_PATH
+				, T2.BOX_PATH, T2.DOMAIN_CODE
+		FROM 	wh_file_list T1
+			INNER JOIN wh_box_list T2 ON T2.UUID = T1.BOX_UUID
+		WHERE T1.FILE_PATH NOT LIKE CONCAT('%',T1.UUID, '%')
+		AND		T1.DELETED_DATE IS NULL
+		ORDER BY T2.DOMAIN_ID ASC, TOBE_PATH ASC, FILE_UUID ASC
+	</select>
+	
+	<select id="selectMigDelFileInfo" parameterType="cmap" resultType="cmap">
+		/* queryID = webhardAdmin.config.selectMigDelFileInfo */
+		SELECT	
+				T2.DOMAIN_ID
+				, CASE WHEN T1.FOLDER_UUID = '' THEN CONCAT('/',T1.BOX_UUID)
+					ELSE ( SELECT CONCAT('/', BOX_UUID, FOLDER_PATH) FROM wh_folder_list WHERE UUID = T1.FOLDER_UUID)
+					END	AS TOBE_PATH
+				, T1.UUID AS FILE_UUID, T1.BOX_UUID, T1.FOLDER_UUID, T1.FILE_NAME
+				, T2.BOX_PATH, T2.DOMAIN_CODE, T1.FILE_PATH, T1.DELETED_DATE, T1.TRASHBIN_FLAG
+		FROM 	wh_file_list T1
+			INNER JOIN wh_box_list T2 ON T2.UUID = T1.BOX_UUID
+		WHERE 	1=1
+		AND		T1.DELETED_DATE IS NOT NULL
+		AND		(T1.TRASHBIN_FLAG != 'D' OR T1.TRASHBIN_FLAG IS NULL)
+		ORDER BY T2.DOMAIN_ID ASC, T1.DELETED_DATE DESC, TOBE_PATH ASC, FILE_UUID ASC
+	</select>
+	
+</mapper>

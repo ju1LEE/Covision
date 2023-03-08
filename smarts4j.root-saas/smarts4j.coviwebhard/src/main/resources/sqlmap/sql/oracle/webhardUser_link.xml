@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="webhardUser.link">
+	<!-- target 정보로 link 정보 조회  -->
+	<select id="selectLinkData" parameterType="cmap" resultType="cmap">
+		SELECT	  LINK
+				, AUTH
+				, PASSWORD AS PASSWORD
+				, TO_CHAR(STARTDATE, 'YYYY.MM.DD') AS STARTDATE
+				, TO_CHAR(ENDDATE, 'YYYY.MM.DD') AS ENDDATE
+		FROM wh_shared_link 
+		WHERE TARGET_TYPE = #{targetType}
+		AND TARGET_UUID = #{targetUuid}
+	</select>
+
+	<!-- link로 link 정보 조회  -->
+	<select id="selectLinkInfo" parameterType="cmap" resultType="cmap">
+		SELECT	  A.TARGET_TYPE
+				, A.TARGET_UUID
+				, NVL((SELECT BOX_UUID FROM wh_folder_list WHERE UUID = A.TARGET_UUID), (SELECT BOX_UUID FROM wh_file_list WHERE UUID = A.TARGET_UUID)) AS BOX_UUID
+				, A.LINK
+				, A.AUTH
+				, A.PASSWORD
+				, A.STARTDATE
+				, A.ENDDATE
+				, CASE WHEN ((A.ENDDATE IS NULL OR SYSDATE <![CDATA[ < ]]> (A.ENDDATE + 1)) AND (A.STARTDATE IS NULL OR SYSDATE > A.STARTDATE)) THEN 'Y' ELSE 'N' END AS ISVALID
+		FROM wh_shared_link A
+		WHERE A.LINK = #{link}
+	</select>
+
+	<insert id="insertLinkData" parameterType="cmap">
+		INSERT INTO wh_shared_link (TARGET_TYPE, TARGET_UUID, LINK, AUTH, PASSWORD, STARTDATE, ENDDATE, CREATEDATE, MODIFYDATE) 
+		VALUES (#{targetType}, #{targetUuid}, #{link}, #{auth}, #{password}, #{startDate}, #{endDate}, SYSDATE, NULL)
+	</insert>
+
+	<update id="updateLinkData" parameterType="cmap">
+		UPDATE wh_shared_link
+		SET	  LINK = #{link}
+			, AUTH = #{auth}
+			, PASSWORD = #{password}
+			, STARTDATE = #{startDate}
+			, ENDDATE = #{endDate}
+			, MODIFYDATE = SYSDATE
+		WHERE TARGET_TYPE = #{targetType}
+		AND TARGET_UUID = #{targetUuid}
+	</update>
+	
+	<select id="selectCheckPassworkd" parameterType="cmap" resultType="java.lang.Long">
+		SELECT COUNT(*)
+		FROM wh_shared_link 
+		WHERE Link = #{link}
+		AND PASSWORD = #{password}
+	</select>
+</mapper>

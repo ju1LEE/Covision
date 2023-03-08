@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="webhardCommon.common">
+
+	<!-- 폴더 및 파일 공유 -->
+	<insert id="insertSharedList" parameterType="cmap">
+		/* webhardCommon.common.insertSharedList */
+		INSERT INTO covi_webhard4j.WH_SHARED_LIST (
+			SHARED_TYPE
+			, SHARED_UUID
+			, SHARED_OWNER_ID
+			, SHARED_GRANT_TYPE
+			, SHARED_STATUS
+			, CREATED_DATE
+		) VALUES (
+			#{sharedType}
+			, #{sharedUuid}
+			, #{sharedOwnerId}
+			, #{sharedGrantType}
+			, #{sharedStatus}
+			, NOW(3)
+		)
+	</insert>
+	
+	<!-- 폴더 및 파일 공유 해제 -->
+	<update id="deleteSharedList" parameterType="cmap">
+		/* webhardCommon.common.deleteSharedList */
+		UPDATE covi_webhard4j.WH_SHARED_LIST 
+		SET
+			DELETED_DATE = NOW(3)
+		WHERE SHARED_UUID = #{sharedUuid}
+		AND SHARED_OWNER_ID = #{sharedOwnerId}
+	</update>
+	
+	<!-- 상위 폴더의 공유 정보 유지  -->
+	<insert id="insertParentSharedList" parameterType="cmap">
+		/* webhardCommon.common.insertParentSharedList */
+		INSERT INTO covi_webhard4j.WH_SHARED_LIST (SHARED_TYPE, SHARED_UUID, SHARED_OWNER_ID, SHARED_GRANT_TYPE, SHARED_STATUS, CREATED_DATE) 
+		SELECT  #{sharedType} AS SHARED_TYPE
+				, #{sharedUuid} AS SHARED_UUID
+				, SHARED_OWNER_ID
+				, SHARED_GRANT_TYPE
+				, SHARED_STATUS
+				, now(3) AS CREATED_DATE
+		FROM covi_webhard4j.wh_shared_list
+		WHERE SHARED_TYPE = 'FOLDER'
+		AND SHARED_UUID = #{parentUuid}
+		AND DELETED_DATE IS NULL
+	</insert>
+	
+	<!-- 파일 및 폴더 공유 시, 공유자에게 알림 메세지 전달  -->
+	<insert id="sendMessagingShared" parameterType="cmap" >
+	<![CDATA[ 
+	INSERT INTO covi_smart4j.sys_alarm_list(				
+		UserCode, Category, MsgType, Title, 
+		URL, 
+		Message, OpenType, IsPush, PusherCode, ReceivedDate, IsRead
+	)
+	VALUES(
+		#{sharedOwnerId}, 'Webhard', 'sharedNotification', '', 
+		'/webhard/layout/user_SharedBoxList.do?CLSYS=webhard&CLMD=user&CLBIZ=Webhard&folderType=Shared', 
+		'', 'PAGEMOVE', 'Y', #{PusherCode}, NOW(3), 'N'
+	)
+	]]> 
+	</insert>
+</mapper>

@@ -1,0 +1,35 @@
+
+ <!--  EmployeesNotice.html - 임직원 소식 -->
+
+<article class="staffNews">
+	<div class="title">
+		<h2 id="employeeTitle"> <span id="newsTitle" class="colorTheme"></span></h2>
+		<div class="staffNewsBtn">
+			<a href="javascript:employeesNotice.getList('-')" class="staffNewsBtnLeft"></a><a href="javascript:employeesNotice.getList('+')" class="staffNewsBtnRight"></a>
+		</div>
+		<p class="staffNewsBtnTx"></p>
+		<div class="inPerTitbox">
+			<select class="selectType02" id="selMode"> 
+				<option value="ALL"><spring:message code='Cache.btn_All'/></option>
+			</select>
+		</div>
+		<a class="btnMainMore" id="boradURL" href="javascript:employeesNotice.goMoreList()">more +</a>
+	</div>                                   
+	<ul id="employeesNotice_list" class="clearFloat stafList">
+		<li>
+			<p class="stfIcon colorTheme"></p>
+			<p class="staffPhoto"></p>
+			<div class="flowerPopup">
+				<p class="staffName"></p>
+				<ul class="flowerMenuList">
+					<li class="flowerProfile"></li>
+					<li class="flowerMail"></li>
+					<li class="flowerFollowing"></li>
+					<li class="flowerTalk"></li>
+					<li class="flowerAddr"></li>
+				</ul>
+			</div>
+			<p class="date"></p>
+		</li>
+	</ul>
+</article>

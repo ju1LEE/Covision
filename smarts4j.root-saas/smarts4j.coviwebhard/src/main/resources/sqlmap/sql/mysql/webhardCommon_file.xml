@@ -1,0 +1,498 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="webhardCommon.file">
+
+	<resultMap id="fileInfoMap" type="cmap">
+		<result property="seq" column="SEQ" />
+		<result property="fileUuid" column="UUID" />
+		<result property="boxUuid" column="BOX_UUID" />
+		<result property="folderUuid" column="FOLDER_UUID" />
+		<result property="fileName" column="FILE_NAME" />
+		<result property="fileType" column="FILE_TYPE" />
+		<result property="fileContentType" column="FILE_CONTENT_TYPE" />
+		<result property="fileSize" column="FILE_SIZE" />
+		<result property="filePath" column="FILE_PATH" />
+		<result property="fileNamePath" column="FILE_NAME_PATH" />
+		<result property="fileGrant" column="FILE_GRANT" />
+		<result property="fileQuickUrl" column="FILE_QUICK_URL" />
+		<result property="bookmark" column="BOOKMARK" />
+		<result property="domainId" column="DOMAIN_ID" />
+		<result property="domainCode" column="DOMAIN_CODE" />
+		<result property="ownerType" column="OWNER_TYPE" />
+		<result property="ownerId" column="OWNER_ID" />
+		<result property="ownerName" column="OWNER_NAME" />
+		<result property="boxPath" column="BOX_PATH" />
+		<result property="folderName" column="FOLDER_NAME" />
+		<result property="parentUuid" column="PARENT_UUID" />
+		<result property="folderPath" column="FOLDER_PATH" />
+		<result property="folderNamePath" column="FOLDER_NAME_PATH" />
+		<result property="folderLevel" column="FOLDER_LEVEL" />
+		<result property="folderGrant" column="FOLDER_GRANT" />
+		<result property="createdDate" column="CREATED_DATE" />
+		<result property="updatedDate" column="UPDATED_DATE" />
+		<result property="deletedDate" column="DELETED_DATE" />
+	</resultMap>
+	
+	<!-- UUID로 파일 조회 -->
+	<select id="selectFile" parameterType="cmap" resultMap="fileInfoMap">
+		/* webhardCommon.file.selectFile */
+		SELECT 
+			A.SEQ
+			, A.UUID
+			, A.BOX_UUID
+			, A.FOLDER_UUID
+			, A.FILE_NAME
+			, A.FILE_TYPE
+			, A.FILE_CONTENT_TYPE
+			, A.FILE_SIZE
+			, A.FILE_PATH
+			, A.FILE_GRANT
+			, A.FILE_QUICK_URL
+			, A.BOOKMARK
+			, DATE_FORMAT(A.CREATED_DATE, '%Y-%m-%d %T') AS CREATED_DATE
+			, A.UPDATED_DATE
+			, A.DELETED_DATE
+			, B.DOMAIN_ID
+			, B.DOMAIN_CODE
+			, B.OWNER_TYPE
+			, B.OWNER_ID
+			, B.OWNER_NAME
+			, B.BOX_PATH
+			, IFNULL(C.FOLDER_NAME, '') AS FOLDER_NAME
+			, IFNULL(C.PARENT_UUID, '') AS PARENT_UUID
+			, IFNULL(C.FOLDER_PATH, '') AS FOLDER_PATH
+			, IFNULL(C.FOLDER_NAME_PATH, '') AS FOLDER_NAME_PATH
+			, IFNULL(C.FOLDER_LEVEL, '') AS FOLDER_LEVEL
+			, IFNULL(C.FOLDER_GRANT, '') AS FOLDER_GRANT
+		FROM covi_webhard4j.WH_FILE_LIST A
+		INNER JOIN covi_webhard4j.WH_BOX_LIST B ON A.BOX_UUID = B.UUID
+		LEFT JOIN covi_webhard4j.wh_FOLDER_list C ON A.FOLDER_UUID = C.UUID
+		WHERE B.USE_YN = 'Y'
+		AND A.UUID = #{fileUuid}
+		<if test='mode != null and mode == "user"'>
+			AND EXISTS (
+				SELECT 'X' FROM covi_webhard4j.wh_box_list wbl
+				LEFT OUTER JOIN covi_smart4j.sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+				WHERE wbl.UUID = A.BOX_UUID
+				AND (
+					wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+					OR (
+						wbl.OWNER_TYPE = 'G'
+						AND (
+							sog.GroupPath LIKE CONCAT('%', #{groupCode}, ';%')
+							OR #{groupPath} LIKE CONCAT('%', wbl.OWNER_ID, ';%')
+						)
+					)
+				)
+				
+				UNION ALL
+				
+				SELECT 'X' FROM covi_webhard4j.wh_shared_list S
+				LEFT OUTER JOIN covi_smart4j.sys_object_group sog ON S.SHARED_GRANT_TYPE = 'GR' AND S.SHARED_OWNER_ID = sog.GroupCode
+				WHERE A.UUID = S.SHARED_UUID
+				AND S.SHARED_TYPE = 'FILE'
+				AND S.SHARED_STATUS = 'ON'
+				AND S.DELETED_DATE IS NULL
+				AND (
+					S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}
+					OR (
+						S.SHARED_GRANT_TYPE = 'GR'
+						AND (
+							sog.GroupPath LIKE CONCAT('%', #{groupCode}, ';%'))
+							OR #{groupPath} LIKE CONCAT('%', S.SHARED_OWNER_ID, ';%')
+						)
+				)
+			)
+		</if>
+	</select>
+	
+	<!-- UUID로 대상 파일 목록 조회 -->
+	<select id="selectFileList" parameterType="cmap" resultMap="fileInfoMap">
+		/* webhardCommon.file.selectFileList */
+		SELECT 
+			A.SEQ
+			, A.UUID
+			, A.BOX_UUID
+			, A.FOLDER_UUID
+			, A.FILE_NAME
+			, A.FILE_TYPE
+			, A.FILE_CONTENT_TYPE
+			, A.FILE_SIZE
+			, A.FILE_PATH
+			, A.FILE_GRANT
+			, A.FILE_QUICK_URL
+			, A.BOOKMARK
+			, A.CREATED_DATE
+			, A.UPDATED_DATE
+			, A.DELETED_DATE
+			, B.DOMAIN_ID
+			, B.DOMAIN_CODE
+			, B.OWNER_TYPE
+			, B.OWNER_ID
+			, B.OWNER_NAME
+			, B.BOX_PATH
+		FROM covi_webhard4j.WH_FILE_LIST A
+		INNER JOIN covi_webhard4j.WH_BOX_LIST B
+		ON A.BOX_UUID = B.UUID
+		<choose>
+			<when test="folderType != 'Trashbin'">
+				WHERE A.DELETED_DATE IS NULL
+			</when>
+			<otherwise>
+				WHERE A.DELETED_DATE IS NOT NULL
+				AND (A.TRASHBIN_FLAG !='D' OR A.TRASHBIN_FLAG IS NULL)
+			</otherwise>
+		</choose>
+		AND B.USE_YN = 'Y'
+		AND A.UUID IN
+		<foreach collection="fileUuids" item="item" index="index" separator="," open="(" close=")">
+			#{item}
+		</foreach>
+	</select>
+
+	<!-- 특정 폴더 내 모든 파일 조회 -->
+	<select id="selectFileListInFolder" parameterType="cmap" resultMap="fileInfoMap">
+		/* webhardCommon.file.selectFileListInFolder */
+		SELECT 
+			A.SEQ
+			, A.UUID
+			, A.BOX_UUID
+			, A.FOLDER_UUID
+			, A.FILE_NAME
+			, A.FILE_TYPE
+			, A.FILE_CONTENT_TYPE
+			, A.FILE_SIZE
+			, A.FILE_PATH
+			, A.FILE_GRANT
+			, A.FILE_QUICK_URL
+			, A.BOOKMARK
+			, A.CREATED_DATE
+			, A.UPDATED_DATE
+			, A.DELETED_DATE
+			, B.DOMAIN_ID
+			, B.DOMAIN_CODE
+			, B.OWNER_TYPE
+			, B.OWNER_ID
+			, B.OWNER_NAME
+			, B.BOX_PATH
+			, C.FOLDER_NAME
+			, C.PARENT_UUID
+			, C.FOLDER_PATH
+			, C.FOLDER_NAME_PATH
+			, C.FOLDER_LEVEL
+			, C.FOLDER_GRANT
+		FROM covi_webhard4j.WH_FILE_LIST A
+		INNER JOIN covi_webhard4j.WH_BOX_LIST B
+		ON A.BOX_UUID = B.UUID
+		INNER JOIN covi_webhard4j.wh_FOLDER_list C
+		ON A.FOLDER_UUID = C.UUID
+		WHERE A.DELETED_DATE IS NULL
+		AND B.USE_YN = 'Y'
+		AND A.FOLDER_UUID = #{folderUuid}
+		ORDER BY A.FILE_NAME
+	</select>
+	
+	<!-- 파일 생성 -->
+	<insert id="insertFile" parameterType="cmap">
+		/* webhardCommon.file.insertFile */
+		INSERT INTO covi_webhard4j.WH_FILE_LIST (
+			BOX_UUID, FOLDER_UUID, UUID, 
+			FILE_NAME, FILE_TYPE, FILE_CONTENT_TYPE, FILE_SIZE, FILE_PATH, 
+			FILE_GRANT, FILE_QUICK_URL, BOOKMARK,
+			CREATED_DATE
+		) VALUES (
+			#{boxUuid}, #{folderUuid}, #{fileUuid}, 
+			covi_webhard4j.Fn_CheckFileName(#{boxUuid}, #{folderUuid}, #{fileName}), #{fileType}, #{fileContentType}, #{fileSize}, #{filePath},
+			#{fileGrant}, #{fileQuickUrl}, #{bookmark},
+			NOW(3)
+		)
+	</insert>
+	
+	<!-- 파일 복사 -->
+	<insert id="insertCopyFile" parameterType="cmap">
+		/* webhardCommon.file.insertCopyFile */
+		INSERT INTO covi_webhard4j.WH_FILE_LIST (
+			BOX_UUID, FOLDER_UUID, UUID, 
+			FILE_NAME, FILE_TYPE, FILE_CONTENT_TYPE, FILE_SIZE, FILE_PATH, 
+			FILE_GRANT, FILE_QUICK_URL, BOOKMARK,
+			CREATED_DATE
+		) VALUES (
+			#{boxUuid}, #{folderUuid}, #{newFileUUid}, 
+			covi_webhard4j.Fn_CheckFileName(#{boxUuid}, #{folderUuid}, #{fileName}), #{fileType}, #{fileContentType}, #{fileSize}, #{filePath},
+			#{fileGrant}, #{fileQuickUrl}, #{bookmark},
+			NOW(3)
+		)
+	</insert>
+	
+	<!-- 파일 경로 수정 -->
+	<update id="updateFilePath" parameterType="cmap">
+		/* webhardCommon.file.updateFilePath */
+		UPDATE covi_webhard4j.WH_FILE_LIST 
+		SET
+			FILE_PATH = #{filePath}
+			, UPDATED_DATE = NOW(3)
+		WHERE UUID = #{fileUuid} 
+	</update>
+	
+	<!-- 파일 목록 삭제  -->
+	<update id="deleteFileList" parameterType="cmap">
+		/* webhardCommon.file.deleteFileList */
+		UPDATE covi_webhard4j.WH_FILE_LIST A
+		SET	  DELETED_DATE = NOW(3)
+			, TRASHBIN_FLAG = 'R'
+		WHERE UUID IN 
+		<foreach collection="fileUuids" item="item" index="index" separator="," open="(" close=")">
+			#{item}
+		</foreach>
+		AND EXISTS (
+			SELECT 'X' FROM covi_webhard4j.wh_box_list wbl
+			LEFT OUTER JOIN covi_smart4j.sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+			WHERE wbl.UUID = A.BOX_UUID
+			AND (
+				wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+				OR (
+					wbl.OWNER_TYPE = 'G'
+					AND (
+						sog.GroupPath LIKE CONCAT('%', #{groupCode}, ';%')
+						OR #{groupPath} LIKE CONCAT('%', wbl.OWNER_ID, ';%')
+					)
+				)
+			)
+		)
+	</update>
+	
+	<!-- 파일 공유 목록 삭제  -->
+	<update id="deleteFileSharedList" parameterType="cmap">
+		/* webhardCommon.file.deleteFileSharedList */
+		UPDATE covi_webhard4j.WH_SHARED_LIST 
+		SET
+			DELETED_DATE = NOW(3)
+		WHERE SHARED_TYPE = 'FILE'
+		AND SHARED_UUID IN 
+		<foreach collection="fileUuids" item="item" index="index" separator="," open="(" close=")">
+			#{item}
+		</foreach>
+	</update>
+	
+	<!-- 휴지통에서 파일 목록 영구 삭제  -->
+	<update id="deleteFileListFromTrashbin" parameterType="cmap">
+		/* webhardCommon.file.deleteFileListFromTrashbin */
+		UPDATE covi_webhard4j.WH_FILE_LIST A
+		SET	  UPDATED_DATE = NOW(3)
+			, DELETED_DATE = NOW(3)
+			, TRASHBIN_FLAG = 'D'
+		WHERE 1=1
+		<if test="fileUuids != null and fileUuids.size > 0">
+			AND UUID IN
+			<foreach collection="fileUuids" item="item" index="index" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test="folderUuids != null and folderUuids.size > 0">
+			<foreach collection="folderUuids" item="item" index="index" separator="OR " open="AND (" close=")">
+				FILE_PATH LIKE CONCAT('%', #{item}, '%')
+			</foreach>
+		</if>
+		AND EXISTS (
+			SELECT 'X' FROM covi_webhard4j.wh_box_list wbl
+			LEFT OUTER JOIN covi_smart4j.sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+			WHERE wbl.UUID = A.BOX_UUID
+			AND (
+				wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+				OR (
+					wbl.OWNER_TYPE = 'G'
+					AND (
+						sog.GroupPath LIKE CONCAT('%', #{groupCode}, ';%')
+						OR #{groupPath} LIKE CONCAT('%', wbl.OWNER_ID, ';%')
+					)
+				)
+			)
+		)
+	</update>
+	
+	<insert id="insertFileInfo" parameterType="cmap">
+		/* webhardCommon.file.insertFileInfo */
+		INSERT INTO covi_webhard4j.WH_FILE_LIST (
+				BOX_UUID, FOLDER_UUID, UUID, 
+				FILE_NAME, FILE_TYPE, FILE_CONTENT_TYPE, FILE_SIZE, FILE_PATH, 
+				FILE_GRANT, FILE_QUICK_URL, BOOKMARK,
+				CREATED_DATE
+		) VALUES (
+			#{boxUuid}, #{folderUuid}, #{fileUuid}, 
+			covi_webhard4j.Fn_CheckFileName(#{boxUuid}, #{folderUuid}, #{fileName}), #{fileType}, #{fileContentType}, #{fileSize}, #{filePath},
+			'RW', #{fileQuickUrl}, #{bookmark},
+			NOW(3)
+		)
+	</insert>
+	
+	<update id="restoreFile" parameterType="cmap">
+		UPDATE covi_webhard4j.wh_file_list A
+		SET	  UPDATED_DATE = NOW(3)
+			, DELETED_DATE = NULL
+			, TRASHBIN_FLAG = NULL
+		WHERE UUID IN
+		<foreach collection="fileUuids" item="item" index="index" separator="," open="(" close=")">
+			#{item}
+		</foreach>
+		AND EXISTS (
+			SELECT 'X' FROM covi_webhard4j.wh_box_list wbl
+			LEFT OUTER JOIN covi_smart4j.sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+			WHERE wbl.UUID = A.BOX_UUID
+			AND (
+				wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+				OR (
+					wbl.OWNER_TYPE = 'G'
+					AND (
+						sog.GroupPath LIKE CONCAT('%', #{groupCode}, ';%')
+						OR #{groupPath} LIKE CONCAT('%', wbl.OWNER_ID, ';%')
+					)
+				)
+			)
+		)
+	</update>
+	
+	<!-- 파일 다운로드 리스트 -->
+	<select id="selectDownFileList" parameterType="cmap" resultMap="fileInfoMap">
+		SELECT	  A.UUID
+				, A.BOX_UUID
+				, A.FOLDER_UUID
+				, A.FILE_NAME
+				, A.FILE_TYPE
+				, A.FILE_CONTENT_TYPE
+				, A.FILE_SIZE
+				, A.FILE_PATH
+				, CONCAT(SUBSTRING(CONCAT(B.FOLDER_NAME_PATH, '/'), (INSTR(CONCAT(B.FOLDER_NAME_PATH, '/'), CONCAT(C.FOLDER_NAME, '/')) - 1)), A.FILE_NAME) AS FILE_NAME_PATH
+				, A.FILE_GRANT
+				, A.FILE_QUICK_URL
+				, A.BOOKMARK
+				, A.CREATED_DATE
+				, A.UPDATED_DATE
+				, A.DELETED_DATE
+		FROM covi_webhard4j.wh_file_list A
+		LEFT OUTER JOIN covi_webhard4j.wh_folder_list B ON A.FOLDER_UUID = B.UUID
+		LEFT OUTER JOIN covi_webhard4j.wh_folder_list C ON C.UUID = #{folderUuid}
+		WHERE 1=1
+		AND A.DELETED_DATE IS NULL
+		AND A.TRASHBIN_FLAG IS NULL
+		AND A.FILE_PATH LIKE CONCAT('%', #{folderUuid}, '%')
+		<if test='mode != null and mode == "user"'>
+			AND EXISTS (
+				SELECT 'X' FROM covi_webhard4j.wh_box_list wbl
+				LEFT OUTER JOIN covi_smart4j.sys_object_group sog ON wbl.OWNER_TYPE = 'G' AND wbl.OWNER_ID = sog.GroupCode
+				WHERE wbl.UUID = A.BOX_UUID
+				AND (
+					wbl.OWNER_TYPE = 'U' AND wbl.OWNER_ID = #{userCode}
+					OR (
+						wbl.OWNER_TYPE = 'G'
+						AND (
+							sog.GroupPath LIKE CONCAT('%', #{groupCode}, ';%')
+							OR #{groupPath} LIKE CONCAT('%', wbl.OWNER_ID, ';%')
+						)
+					)
+				)
+				
+				UNION ALL
+				
+				SELECT 'X' FROM covi_webhard4j.wh_shared_list S
+				LEFT OUTER JOIN covi_smart4j.sys_object_group sog ON S.SHARED_GRANT_TYPE = 'GR' AND S.SHARED_OWNER_ID = sog.GroupCode
+				WHERE A.UUID = S.SHARED_UUID
+				AND S.SHARED_TYPE = 'FILE'
+				AND S.SHARED_STATUS = 'ON'
+				AND S.DELETED_DATE IS NULL
+				AND (
+					S.SHARED_GRANT_TYPE = 'UR' AND S.SHARED_OWNER_ID = #{userCode}
+					OR (
+						S.SHARED_GRANT_TYPE = 'GR'
+						AND (
+							sog.GroupPath LIKE CONCAT('%', #{groupCode}, ';%'))
+							OR #{groupPath} LIKE CONCAT('%', S.SHARED_OWNER_ID, ';%')
+						)
+				)
+			)
+		</if>
+	</select>
+	
+	<!-- 휴지통 파일 목록 -->
+	<select id="selectTrashbinFileList" parameterType="cmap" resultType="cmap">
+		SELECT	  A.UUID
+				, A.BOX_UUID
+				, A.FOLDER_UUID
+				, A.FILE_NAME
+				, A.FILE_TYPE
+				, A.FILE_CONTENT_TYPE
+				, A.FILE_SIZE
+				, A.FILE_GRANT
+				, A.BOOKMARK
+				, DATE_FORMAT(A.CREATED_DATE, '%Y-%m-%d %T') AS CREATED_DATE
+				, DATE_FORMAT(A.CREATED_DATE, '%Y%m%d') AS DATE
+				, IFNULL(A.UPDATED_DATE, '') AS UPDATED_DATE
+				, A.DELETED_DATE
+				, A.TRASHBIN_FLAG
+				, 'file' AS TYPE
+		FROM covi_webhard4j.WH_FILE_LIST A
+		INNER JOIN covi_webhard4j.WH_BOX_LIST B ON A.BOX_UUID = B.UUID AND B.USE_YN = 'Y'
+		WHERE 1=1
+		AND A.BOX_UUID = #{BOX_UUID}
+		AND A.DELETED_DATE IS NOT NULL
+		AND (A.TRASHBIN_FLAG != 'D' OR A.TRASHBIN_FLAG IS NULL)
+	</select>
+	
+	<!-- 파일 정보 목록 -->
+	<select id="selectFileInfoList" parameterType="cmap" resultMap="fileInfoMap">
+		/* webhardCommon.file.selectFileInfoList */
+		SELECT	  A.SEQ
+				, A.UUID
+				, A.BOX_UUID
+				, A.FOLDER_UUID
+				, A.FILE_NAME
+				, A.FILE_TYPE
+				, A.FILE_CONTENT_TYPE
+				, A.FILE_SIZE
+				, A.FILE_PATH
+				, A.FILE_GRANT
+				, A.FILE_QUICK_URL
+				, A.BOOKMARK
+				, DATE_FORMAT(A.CREATED_DATE, '%Y-%m-%d %T') AS CREATED_DATE
+				, IFNULL(A.UPDATED_DATE, '') AS UPDATED_DATE
+				, A.DELETED_DATE
+				, B.DOMAIN_ID
+				, B.DOMAIN_CODE
+				, B.OWNER_TYPE
+				, B.OWNER_ID
+				, B.OWNER_NAME
+				, B.BOX_PATH
+				, IFNULL(C.FOLDER_NAME, '') AS FOLDER_NAME
+				, IFNULL(C.PARENT_UUID, '') AS PARENT_UUID
+				, IFNULL(C.FOLDER_PATH, '') AS FOLDER_PATH
+				, IFNULL(C.FOLDER_NAME_PATH, '') AS FOLDER_NAME_PATH
+				, IFNULL(C.FOLDER_LEVEL, '') AS FOLDER_LEVEL
+				, IFNULL(C.FOLDER_GRANT, '') AS FOLDER_GRANT
+		FROM covi_webhard4j.WH_FILE_LIST A
+		INNER JOIN covi_webhard4j.WH_BOX_LIST B ON A.BOX_UUID = B.UUID AND B.USE_YN = 'Y'
+		LEFT OUTER JOIN covi_webhard4j.wh_FOLDER_list C ON A.FOLDER_UUID = C.UUID
+		WHERE 1=1
+		AND A.DELETED_DATE IS NULL
+		AND A.UUID IN 
+		<foreach collection="fileUuids" item="item" index="index" separator="," open="(" close=")">
+			#{item}
+		</foreach>
+		ORDER BY A.FILE_NAME
+	</select>
+	
+	<select id="selectFileName" parameterType="cmap" resultType="String">
+		/* webhardCommon.file.selectFileName */
+		SELECT FILE_NAME
+		FROM covi_webhard4j.WH_FILE_LIST
+		WHERE 1=1
+		AND UUID = #{fileUuid}
+		AND BOX_UUID = #{boxUuid}
+	</select>
+	
+	<update id="renameFile" parameterType="cmap">
+		/* webhardCommon.file.renameFile */
+		UPDATE covi_webhard4j.wh_file_list wfl
+		SET FILE_NAME = CONCAT(#{fileName}, '.', wfl.FILE_TYPE), UPDATED_DATE = NOW(3)
+		WHERE wfl.BOX_UUID = #{boxUuid} AND wfl.UUID = #{fileUuid}
+	</update>
+</mapper>
