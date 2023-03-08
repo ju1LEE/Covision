@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://www.mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="form.apvlinemanager">
+	
+     <!-- 특정 사용자의 개인결재선 목록 조회  -->
+    <select id="selectPrivateDomainList" parameterType="cmap" resultType="cmap">
+        SELECT
+        	PrivateDomainDataID AS "PrivateDomainDataID"
+        	, DisplayName AS "DisplayName"
+        	, Abstract AS "Abstract"
+        	, Description AS "Description"
+        	, PrivateContext AS "PrivateContext"
+        	, DefaultYN AS "DefaultYN"
+		FROM jwf_privatedomaindata 
+		WHERE CustomCategory = 'APPROVERCONTEXT'
+		AND OwnerID = #{userID}
+		ORDER BY DisplayName ASC
+    </select>
+	
+    <!-- 특정 사용자의 개인결재선 목록 삭제  -->
+    <delete id="deletePrivateDomain" parameterType="cmap">
+        DELETE FROM jwf_privatedomaindata 
+		WHERE PrivateDomainDataID = #{privateDomainID}
+    </delete>
+    
+    <!-- 개인결재선 데이터 변경 (결재선 멤버 삭제)-->
+    <update id="updatePrivateDomain" parameterType="cmap">
+        UPDATE jwf_privatedomaindata
+		SET Abstract = #{abstract}, PrivateContext = #{privateContext}
+		WHERE PrivateDomainDataID =  #{privateDomainDataID}
+    </update>
+
+    <!-- 공용 배포 목록 조회  -->
+    <select id="selectDistributionList" parameterType="cmap" resultType="cmap">
+	    SELECT
+	    	GroupID AS "GroupID"
+	    	, GroupCode AS "GroupCode"
+	    	, GroupName AS "GroupName"
+	    	, Description AS "Description"
+		FROM jwf_group
+		WHERE EntCode = #{entCode}
+		ORDER BY SortKey
+    </select>
+    
+    <select id="selectDistributionMember" parameterType="cmap" resultType="cmap">
+	   SELECT GroupCode AS "Code", MultiDisplayName AS "Name" FROM (
+      		SELECT gr.GroupCode ,gr.MultiDisplayName FROM jwf_groupmember mem 
+			INNER JOIN sys_object_group gr ON mem.UserCode = gr.GroupCode
+			WHERE mem.GroupID =  #{groupID}
+			UNION ALL
+			SELECT ur.UserCode, ur.MultiDisplayName FROM jwf_groupmember mem 
+			INNER JOIN sys_object_user ur ON mem.UserCode = ur.UserCode
+			WHERE GroupID = #{groupID}
+		) Member
+    </select>
+    
+    <!-- 개인수신처 목록 조회  -->
+    <select id="selectPrivateDistributionList" parameterType="cmap" resultType="cmap">
+	 	SELECT
+	 		GroupID AS "GroupID"
+	 		, Type AS "Type"
+	 		, DisplayName AS "DisplayName"
+	 		, OwnerID AS "OwnerID"
+		FROM jwf_privategroup
+		WHERE Type='D' and OwnerID = #{userID}
+    </select>
+    
+    <!-- 특정 개인수신처의 멤버 조회 -->
+    <select id = "selectPrivateDistributionMember" parameterType="cmap" resultType="cmap">
+	    SELECT
+	    	GroupMemberID AS "GroupMemberID"
+	    	, GroupID AS "GroupID"
+	    	, Type AS "Type"
+	    	, ReceiptID AS "ReceiptID"
+	    	, ReceiptName AS "ReceiptName"
+	    	, ReceiptDeptID AS "ReceiptDeptID"
+	    	, ReceiptDeptName AS "ReceiptDeptName"
+	    	, DNName AS "DNName"
+	    	, HasChild AS "HasChild"
+	    	, SortKey AS "SortKey"
+	    FROM jwf_privategroupmember 
+		WHERE GroupID = #{groupID}
+    </select>
+    
+    <!-- 개인수신처 삭제 -->
+    <delete id = "deletePrivateDistribution" parameterType="cmap">
+        DELETE FROM jwf_privategroup 
+		WHERE GroupID = #{groupID}
+    </delete>
+    
+    <!-- 개인수신처 삭제 시 해당 멤버 삭제 -->
+    <delete id = "deletePrivateDistributionMember" parameterType="cmap">
+		DELETE FROM jwf_privategroupmember
+		WHERE GroupID = #{groupID}
+    </delete>
+    
+    <!-- 개인수신처의 특정 수신자 삭제 -->
+    <delete id = "deletePrivateDistributionMemberData" parameterType="cmap">
+    	DELETE FROM jwf_privategroupmember
+		WHERE GroupMemberID = #{groupMemberID}
+    </delete>
+
+    <update  id = "updataPrivateDomainDefaultY" parameterType="cmap">
+        UPDATE jwf_privatedomaindata
+		SET DefaultYN = 'Y'
+		WHERE PrivateDomainDataID= #{PrivateDomainID}
+    </update>
+    
+    <update  id = "updataPrivateDomainDefaultN" parameterType="cmap">
+       UPDATE jwf_privatedomaindata
+	   SET DefaultYN = 'N'
+	   WHERE OwnerID = #{userID}
+    </update>
+    
+    <select id="checkAbsentMember" parameterType="cmap" resultType="cmap">
+       <![CDATA[     
+			SELECT ur.UserCode AS "PERSON_CODE"
+					, 0 AS "PERSON_ID"
+					, ur.MultiDisplayName AS "DISPLAY_NAME"
+					, bg.DeptCode AS "UNIT_CODE"
+					, bg.MultiDeptName AS "UNIT_NAME"
+					, bg.JobTitleCode||';'||bg.MultiJobTitleName AS "JOBTITLE_Z"
+					, bg.JobLevelCode||';'||bg.MultiJobLevelName AS "JOBLEVEL_Z"
+					, bg.JobPositionCode||';'||bg.MultiJobPositionName AS "JOBPOSITION_Z"
+					,bg.CompanyCode AS "ENT_CODE"
+			FROM sys_object_user_basegroup bg
+			LEFT JOIN sys_object_user ur ON ur.UserCode = bg.UserCode
+			WHERE ur.IsUse = 'Y'
+			AND ur.UserCode IN 
+		]]>
+	 	<foreach collection="userCodes" item="userCode" index="index"  open="(" close=")" separator=",">
+           #{userCode}
+        </foreach>
+    </select>
+    
+    <insert id = "insertPrivateDomainData" parameterType="cmap">
+        <![CDATA[
+        	INSERT INTO jwf_privatedomaindata(CustomCategory,DisplayName,OwnerID,Abstract,Description,PrivateContext)
+			VALUES(#{customCategory},#{displayName},#{ownerID},#{abstract},#{description},#{privateContext})
+   		]]>
+    </insert>
+    
+    <insert id = "insertPrivateDistribution" parameterType="cmap" useGeneratedKeys="true" keyProperty="GroupID"  keyColumn="GroupID">
+        <![CDATA[
+        	INSERT INTO jwf_privategroup(Type,DisplayName,OwnerID) 
+        	VALUES(#{type},#{displayName},#{ownerID})
+   		]]>
+   		<selectKey keyProperty="GroupID" resultType="long" order="AFTER">
+            SELECT JWF_PRIVATEGROUP_SEQ.CURRVAL FROM DUAL
+        </selectKey>
+   		
+    </insert>
+    
+    <insert id = "insertPrivateDistributionMember" parameterType="cmap" >
+        <![CDATA[
+	        INSERT INTO jwf_privategroupmember(GroupID,Type,ReceiptID,ReceiptName,ReceiptDeptID,ReceiptDeptName,DNName,HasChild,SortKey)
+			VALUES (#{groupID},#{type},#{receiptID},#{receiptName},#{receiptDeptID},#{receiptDeptName},#{DNName},#{hasChild},#{sortKey})
+		]]>
+    </insert>
+    
+	<select id="selectApvlineAuth" resultType="java.lang.Long">
+		SELECT COUNT(*) FROM jwf_privategroup G 
+		INNER JOIN jwf_privategroupmember M ON G.GROUPID = M.GROUPID 
+		WHERE G.OWNERID = #{ownerID}
+		AND G.GROUPID  = #{groupID}
+	</select>
+</mapper>
+

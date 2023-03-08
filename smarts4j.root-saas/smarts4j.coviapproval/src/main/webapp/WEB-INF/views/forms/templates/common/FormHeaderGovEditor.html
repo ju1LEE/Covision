@@ -1,0 +1,175 @@
+<!-- 문서유통상단 -->
+<table id="docInfoTB" class="tableStyle linePlus mt10 fsbTop" cellpadding="0" cellspacing="0" style="background-color:white; border:1px solid #c3d7df;">
+	<colgroup>
+        <col style="width: 20%">
+        <col style="width: 30%">
+        <col style="width: 20%">
+        <col style="width: 30%">
+    </colgroup>
+    <tbody>
+    	<tr>
+	    	<!--문서번호-->
+	    	<th><spring:message code='Cache.lbl_apv_DocNo'/></th>
+	    	<td style="text-align:left;">
+	    		{{ doc.FormInstanceInfo.DocNo }}
+	    	</td>
+	    	<!--보안등급-->
+	    	<th><spring:message code='Cache.lbl_SecurityLevel'/></th>
+	    	<td style="text-align:left;">
+	    		<select data-type="dField" id="DocLevel" data-element-type="sel_d_v" data-binding="post"></select>
+	    	</td>
+	    </tr>
+	    <tr>
+	    	<!--보존기간-->
+	    	<th><spring:message code='Cache.lbl_preservationPeriod'/></th>
+	    	<td style="text-align:left;">
+	    		<select data-type="dField" id="SaveTerm" data-element-type="sel_d_v" data-binding="post"></select>
+	    	</td>
+	    	<!--공개여부-->
+	    	<th><spring:message code='Cache.lbl_apv_Publication'/></th>
+	    	<td style="text-align:left;">
+	    		<div data-type="mField" data-element-type="rdo_d" onclick="chkdocInfo(this)" id="RELEASE_CHECK" data-node-name="RELEASE_CHECK">
+		            <input type="radio" name="RELEASE_CHECK"  value="1" id="RELEASE_CHECK_1" checked="checked"/> <label for="RELEASE_CHECK_1">공개&nbsp;</label>
+		            <input type="radio" name="RELEASE_CHECK" value="3" id="RELEASE_CHECK_3" /> <label for="RELEASE_CHECK_3">비공개</label>
+		            <input type="hidden" id="RELEASE_RESTRICTION" class="input-required mw150p" name="returnDataField">
+	            </div>
+	    	</td>
+	    </tr>
+	    <tr>
+	    	<!--결재유형-->
+	    	<th><spring:message code='Cache.lbl_apv_apvType'/></th>
+	    	<td style="text-align:left;">
+	    		<div data-type="mField" data-element-type="rdo_d" id="RECEIVE_CHECK" data-node-name="RECEIVE_CHECK" onclick="chkdocInfo(this)" >
+		            <input type="radio" name="RECEIVE_CHECK" value="indoc" id="RECEIVE_CHECK_indoc"/> <label for="RECEIVE_CHECK_indoc">내부결재&nbsp;</label>
+		            <input type="radio" name="RECEIVE_CHECK" value="else" id="RECEIVE_CHECK_else" checked="checked" /> <label for="RECEIVE_CHECK_else">시행발송</label>
+					<input type="hidden" style="width: 38%; display: none" id="ReceiveNamesR" name="returnDataField" readonly="readonly">
+					<input type="hidden" style="width: 55%; display: none" id="Receivepaper" name="returnDataField">
+					<input type="hidden" style="width: 38%; display: none" id="RECEIVEGOV_INFO" name="returnDataField" readonly="readonly">
+	            </div> 
+	    	</td>
+	    	<!--인장선택-->
+	    	<th><spring:message code='Cache.lbl_apv_stempkind'/></th>
+	    	<td style="text-align:left;">
+	    		<select data-type="mField" class="hidden" id="SENDERMASTER" data-element-type="sel_d_t" style="width:150px;" title="인장" onchange="setSenderMasterAndSealSignAndChief();">
+			  		<option value="">선택</option>
+				</select>
+	    	</td>
+	    </tr>
+	    <!-- <tr>
+	    </tr> -->
+       </tbody>
+</table>
+
+<!-- 문서유통 필요 내용 -->
+<table id="GovInfo" class="tableStyle linePlus mt10" cellpadding="0" cellspacing="0" style="background-color:white; border:1px solid #c3d7df;">
+	<colgroup>
+        <col style="width: 20%">
+        <col style="width: 30%">
+        <col style="width: 20%">
+        <col style="width: 30%">
+    </colgroup>
+    <tbody>
+    	<tr>
+	    	<!--전화번호-->
+	    	<th>전화번호</th>
+	    	<td style="text-align:left;">
+	    		 <input type="text" data-type="mField" id="DocDistPhoneNum" value="{{ doc.BodyContext.DocDistPhoneNum }}" style="width:99%;" />
+	    	</td>
+	    	<!--팩스번호-->
+	    	<th>팩스번호</th>
+	    	<td style="text-align:left;">
+				<input type="text" data-type="mField" id="DocDistFaxNum" value="{{ doc.BodyContext.DocDistFaxNum }}" style="width:99%;" />
+			</td>
+	    </tr>
+	    <tr>
+	    	<!--홈페이지-->
+	    	<th>HomePage</th>
+	    	<td style="text-align:left;">
+				<input type="text" data-type="mField" id="DocDistHomePage" value="{{ doc.BodyContext.DocDistHomePage }}" style="width:99%;" />
+			</td>
+	    	<!--공개여부-->
+	    	<th>E-mail</th>
+	    	<td style="text-align:left;">
+	    		<input type="text" data-type="mField" id="DocDistEmail" value="{{ doc.BodyContext.DocDistEmail }}" style="width:99%;" />
+	    	</td>
+	    </tr>
+	    <tr>
+	    	<!--우편번호-->
+	    	<th>우편번호</th>
+	    	<td style="text-align:left;">
+	    		<input type="text" data-type="mField" id="DocDistZipCode" value="{{ doc.BodyContext.DocDistZipCode }}" style="width:99%;" />
+	    	</td>
+	    	<td colspan="2">
+	    	</td>
+	    </tr>
+	    <tr>
+	    	<!--주소-->
+	    	<th>주소</th>
+	    	<td  colspan="3">
+	    		<input type="text" data-type="mField" id="DocDistAdress" value="{{ doc.BodyContext.DocDistAdress }}" style="width:99%;" />
+	    	</td>
+	    </tr>
+       </tbody>
+</table>
+
+
+<!-- 수신처 -->
+<table class="tableStyle linePlus mt10" cellpadding="0" cellspacing="0" id="ReceiveLine">
+    <colgroup>
+        <col style="width:12%" />
+        <col style="width:*" />
+    </colgroup>
+    <tr>
+        <th ><spring:message code='Cache.lbl_DESTINATION'/></th>
+        <td>
+        	<input type="text" data-type="mField" id="DocRecLine" value="{{ doc.BodyContext.DocRecLine }}" readonly="readonly" style="width:99%; border:hidden" />
+        </td>
+    </tr>
+</table>
+
+<!-- 제목 -->
+<table  class="tableStyle linePlus mt10"  id="tblFormSubject" cellpadding="0" cellspacing="0" >
+    <colgroup>
+        <col style="width:12%" />
+        <col style="width:*" />
+    </colgroup>
+    <tr>
+        <th id="TIT_SUBJECT"><spring:message code='Cache.lbl_Title'/></th>
+        <td><input type="text" class="w100" data-type="dField" id="Subject" value="{{ doc.FormInstanceInfo.Subject }}" title="<spring:message code='Cache.lbl_Title'/>" data-model="FormInstanceInfo.Subject" data-binding="pre" style="height:25px;" required></td>
+    </tr>
+</table>
+
+<!-- 요약전 -->
+<input type="hidden" data-type="mField" id="SummaryContent" value="{{ doc.BodyContext.SummaryContent }}" />
+
+<table class="table_10" style="display: none">
+	<!-- 한글 본문 데이터 -->
+	<input type="hidden" data-type="mField" id="BODY_CONTEXT_HWP" value="{{ doc.BodyContext.BODY_CONTEXT_HWP }}" data-binding="pre" style=" border:0px;" readonly="readonly" />
+	<!-- 발신자 ID -->
+	<input type="hidden" data-type="mField" id="BODY_CONTEXT_SENDERMASTER" value="{{ doc.BodyContext.BODY_CONTEXT_SENDERMASTER }}" data-binding="pre" style=" border:0px;" readonly="readonly" />
+	<!-- 발신자 스탬프 -->
+	<input type="hidden" data-type="mField" id="BODY_CONTEXT_SEALSIGN" value="{{ doc.BodyContext.BODY_CONTEXT_SEALSIGN }}" data-binding="pre" style=" border:0px;" readonly="readonly" />
+	
+	<!-- 발신자 스탬프 -->
+	<input type="hidden" data-type="mField" id="STAMP" value="{{ doc.BodyContext.STAMP }}" data-binding="pre" style=" border:0px;" readonly="readonly" />
+	<!-- 발신자 로고 -->
+	<input type="hidden" data-type="mField" id="LOGO" value="{{ doc.BodyContext.LOGO }}" data-binding="pre" style=" border:0px;" readonly="readonly" />
+	<!-- 발신자 심볼 -->
+	<input type="hidden" data-type="mField" id="SYMBOL" value="{{ doc.BodyContext.SYMBOL }}" data-binding="pre" style=" border:0px;" readonly="readonly" />
+	
+	<!-- 발신자 명 -->
+	<input type="hidden" data-type="mField" id="BODY_CONTEXT_CHIEF" value="{{ doc.BodyContext.BODY_CONTEXT_CHIEF }}" data-binding="pre" style=" border:0px;" readonly="readonly" />
+	<!-- 수신처 -->
+	<input type="hidden" data-type="mField" id="RECEIVE_INFO" value="{{ doc.BodyContext.RECEIVE_INFO }}" data-binding="pre" style=" border:0px;" readonly="readonly" /> 
+	<!-- 발신처 관리 > 캠페인(상) -->
+	<input type="hidden" data-type="mField" id="CAMPAIGN_T" value="{{ doc.BodyContext.CAMPAIGN_T }}" data-binding="pre" style=" border:0px;" readonly="readonly" />
+	<!-- 발신처 관리 > 캠페인(하) -->
+	<input type="hidden" data-type="mField" id="CAMPAIGN_F" value="{{ doc.BodyContext.CAMPAIGN_F }}" data-binding="pre" style=" border:0px;" readonly="readonly" />
+	<!-- 결재 수신처 구분 -->
+	<input type="hidden" data-type="mField" id="RECEIVEGOV_TYPE" value="{{ doc.BodyContext.RECEIVEGOV_TYPE }}" data-binding="pre" style=" border:0px;" readonly="readonly" />
+	<!--  기관명 -->
+	<input type="hidden" data-type="mField" id="ORGAN" value="{{ doc.BodyContext.ORGAN }}" data-binding="pre" style=" border:0px;" readonly="readonly" />
+</table>
+<!-- 저장할 필요 없지만 필요한 필드들 -->
+<input type="hidden" id="RECEIVEGOV_NAMES" /><!-- 수신처 팝업에서 사용됨 (대외전자) -->
+
